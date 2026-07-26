@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv
+venv/
+env/
+*.egg
+MANIFEST
+
+# Data
+data/raw/
+data/processed/
+notebooks/
+
+# Models & Artifacts
+models/
+artifacts/
+
+# Testing
+tests/
+.pytest_cache/
+*.coverage
+coverage.xml
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+docker-compose.yml
+
+# Documentation
+README.md
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Docker
+.docker/

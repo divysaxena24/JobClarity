@@ -1,0 +1,36 @@
+# Data Processing
+pandas
+numpy
+
+# Machine Learning
+scikit-learn
+xgboost
+optuna
+
+# NLP
+nltk
+
+# API
+fastapi
+uvicorn
+
+# MLOps
+mlflow
+great_expectations
+
+# UI
+gradio
+
+# Utilities
+joblib
+python-dotenv
+
+# Testing
+pytest
+
+# Code Formatting
+black
+
+# Development
+jupyter
+ipykernel
