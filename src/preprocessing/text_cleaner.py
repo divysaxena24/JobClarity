@@ -4,8 +4,11 @@ Text preprocessing utilities for JobClarity.
 Reusable text cleaning functions for training and inference.
 """
 
-from bs4 import BeautifulSoup
+import re
+import html
+import pandas as pd
 
+from bs4 import BeautifulSoup
 
 def remove_html(text: str) -> str:
     """
