@@ -34,3 +34,4 @@ black
 # Development
 jupyter
 ipykernel
+beautifulsoup4
