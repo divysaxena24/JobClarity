@@ -1,7 +1,7 @@
 """
 Prediction utilities for JobClarity.
 """
-
+from src.explainability.shap_explainer import explain_prediction
 from src.models.model_loader import load_model, load_vectorizer
 from src.preprocessing.text_cleaner import clean_text
 
@@ -29,6 +29,7 @@ def predict_job(job_description: str):
 
     # Fraud Risk Score
     fraud_risk_score = round(probability * 100)
+    top_reasons = explain_prediction(job_description)
 
     # Risk Level
     if fraud_risk_score <= 25:
@@ -45,5 +46,9 @@ def predict_job(job_description: str):
         "fraud_probability": round(probability, 4),
         "fraud_risk_score": fraud_risk_score,
         "risk_level": risk,
+        "top_reasons": top_reasons,
         "model_version": "1.0.0",
+
     }
+
+    
