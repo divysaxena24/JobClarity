@@ -6,6 +6,7 @@ numpy
 scikit-learn
 xgboost
 optuna
+shap
 
 # NLP
 nltk

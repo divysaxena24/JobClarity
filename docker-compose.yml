@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+
+  jobclarity:
+
+    build: .
+
+    container_name: jobclarity
+
+    ports:
+      - "8000:8000"
+
+    restart: unless-stopped
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+    volumes:
+      - ./models:/app/models

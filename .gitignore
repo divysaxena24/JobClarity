@@ -1,29 +1,45 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
 # Virtual Environment
 .venv/
 venv/
+env/
 
 # Python
 __pycache__/
 *.py[cod]
 *.pyo
+*.egg-info/
 
-# Environment Variables
+# Environment
 .env
+.env.local
+
+# Data (training only)
+data/
 
 # Jupyter
+notebooks/
 .ipynb_checkpoints/
-
-# Model Artifacts
-artifacts/
-models/*.pkl
-models/*.joblib
 
 # MLflow
 mlruns/
+mlflow.db
 
-# VS Code
+# Logs
+logs/
+*.log
+
+# Artifacts (generated plots/reports)
+artifacts/
+
+# IDE
 .vscode/
+.idea/
 
-# OS Files
+# OS
 .DS_Store
 Thumbs.db

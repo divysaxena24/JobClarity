@@ -7,46 +7,28 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv
+.venv/
 venv/
 env/
-*.egg
-MANIFEST
-
-# Data
-data/raw/
-data/processed/
-notebooks/
-
-# Models & Artifacts
-models/
-artifacts/
-
-# Testing
-tests/
-.pytest_cache/
-*.coverage
-coverage.xml
-htmlcov/
 
 # IDE
-.idea/
 .vscode/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Environment
-.env
-.env.local
-docker-compose.yml
-
-# Documentation
-README.md
+.idea/
 
 # Jupyter
 .ipynb_checkpoints/
 
-# Docker
-.docker/
+# Cache
+.pytest_cache/
+.mypy_cache/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
