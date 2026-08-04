@@ -503,7 +503,7 @@ Computer Science Engineering Student<br>
 Machine Learning | AI | Full Stack | DevOps
 
 - **GitHub:** [github.com/divysaxena24](https://github.com/divysaxena24)
-- **LinkedIn:** [linkedin.com/in/divyasaxena](https://linkedin.com/in/divyasaxena) *(add your profile URL)*
+- **LinkedIn:** [linkedin.com/in/divyasaxena](https://linkedin.com/in/divyasaxena) 
 
 > If you find this project useful, consider giving it a star!
 
