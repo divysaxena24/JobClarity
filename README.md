@@ -479,35 +479,6 @@ These are rendered in the UI as the **AI Fraud Detection Report** (verdict, anim
 
 ---
 
-## Screenshots
-
-<details>
-<summary><b>Click to view the screenshot gallery (placeholders)</b></summary>
-
-> Replace the placeholder links below with actual screenshots to showcase the project.
-
-| # | Screen | Description |
-|---|---|---|
-| 1 | **Landing Page** | Next.js hero section with the job-description analyzer |
-| 2 | **Prediction Result** | AI Fraud Detection Report with risk gauge + SHAP factors |
-| 3 | **Swagger UI** | FastAPI auto-generated docs at `/docs` |
-| 4 | **Docker** | Container build & run (`docker compose up --build`) |
-| 5 | **GitHub Actions** | CI workflow passing on `main` |
-| 6 | **Render Deployment** | Live backend service health on Render |
-
-```text
-docs/screenshots/landing.png       → Landing Page
-docs/screenshots/prediction.png    → Prediction Result
-docs/screenshots/swagger.png       → Swagger UI
-docs/screenshots/docker.png        → Docker
-docs/screenshots/ci.png            → GitHub Actions
-docs/screenshots/render.png        → Render Deployment
-```
-
-</details>
-
----
-
 ## Future Improvements
 
 - **Better scam detection** — specialized detectors for MLM, crypto, and advance-fee scams
