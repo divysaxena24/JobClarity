@@ -68,8 +68,8 @@ The frontend of JobClarity is maintained in a separate repository.
 
 ## Table of Contents
 
-- [Project Links](#project-links)
-- [Frontend](#frontend)
+- [Project Links](#-project-links)
+- [Frontend](#-frontend)
 - [Features](#features)
 - [Demo](#demo)
 - [Project Structure](#project-structure)
@@ -203,7 +203,7 @@ jobclarity-frontend/
 └── package.json
 ```
 
-> **Note:** the frontend is also maintained as its own repository — see the [Frontend](#frontend) section.
+> **Note:** the frontend is also maintained as its own repository — see the [Frontend](#-frontend) section.
 
 </details>
 
