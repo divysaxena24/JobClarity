@@ -15,9 +15,10 @@ Detect fraudulent job postings with Machine Learning and Explainable AI.
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=githubactions&logoColor=white)
 ![Render](https://img.shields.io/badge/Render-46E3B7?style=flat&logo=render&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat&logo=vercel&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat&logo=open-source-initiative&logoColor=white)
 
-**Live API:** [`https://jobclarity-0tz8.onrender.com`](https://jobclarity-0tz8.onrender.com) &nbsp;•&nbsp; **Interactive Docs:** [`/docs`](https://jobclarity-0tz8.onrender.com/docs)
+**Live App:** [`https://jobclarity.vercel.app`](https://jobclarity.vercel.app) &nbsp;•&nbsp; **Live API:** [`https://jobclarity-0tz8.onrender.com`](https://jobclarity-0tz8.onrender.com) &nbsp;•&nbsp; **Interactive Docs:** [`/docs`](https://jobclarity-0tz8.onrender.com/docs)
 
 </div>
 
@@ -25,12 +26,50 @@ Detect fraudulent job postings with Machine Learning and Explainable AI.
 
 ## Overview
 
-**JobClarity** is an end-to-end AI-powered system that detects fraudulent job postings before they can trick job seekers. Given any job description, the system classifies it as **Real** or **Fake** using a tuned **XGBoost** classifier trained over TF-IDF vectorized text — then goes one step further with **SHAP** (SHapley Additive exPlanations) to explain *why* the model reached its verdict. The result is surfaced through a clean, responsive **Next.js** dashboard backed by a **FastAPI** REST API, fully containerized with **Docker**, shipped with **GitHub Actions CI**, and deployed to **Render**.
+**JobClarity** is an end-to-end AI-powered system that detects fraudulent job postings before they can trick job seekers. Given any job description, the system classifies it as **Real** or **Fake** using a tuned **XGBoost** classifier trained over TF-IDF vectorized text — then goes one step further with **SHAP** (SHapley Additive exPlanations) to explain *why* the model reached its verdict. The result is surfaced through a clean, responsive **Next.js** dashboard backed by a **FastAPI** REST API, fully containerized with **Docker**, shipped with **GitHub Actions CI**, and deployed independently — the **backend on Render** and the **frontend on Vercel**.
+
+---
+
+## 🔗 Project Links
+
+| Resource | Link |
+|----------|------|
+| 🌐 Live Application | [https://jobclarity.vercel.app/](https://jobclarity.vercel.app/) |
+| 🎨 Frontend Repository | [https://github.com/divysaxena24/JobClarity-frontend](https://github.com/divysaxena24/JobClarity-frontend) |
+| ⚙️ Backend Repository | [https://github.com/divysaxena24/JobClarity](https://github.com/divysaxena24/JobClarity) |
+| 🚀 Backend API | [https://jobclarity-0tz8.onrender.com](https://jobclarity-0tz8.onrender.com) |
+| 📖 Swagger API Docs | [https://jobclarity-0tz8.onrender.com/docs](https://jobclarity-0tz8.onrender.com/docs) |
+
+---
+
+## 🌐 Frontend
+
+The frontend of JobClarity is maintained in a separate repository.
+
+**Frontend Repository**
+
+[https://github.com/divysaxena24/JobClarity-frontend](https://github.com/divysaxena24/JobClarity-frontend)
+
+**Live Application**
+
+[https://jobclarity.vercel.app/](https://jobclarity.vercel.app/)
+
+**Frontend Tech Stack**
+
+- Next.js 16
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+- Axios
+
+> The frontend provides a modern responsive SaaS interface for analyzing job postings. It communicates with this FastAPI backend through REST APIs to perform real-time AI-powered fake job detection and display explainable SHAP results.
 
 ---
 
 ## Table of Contents
 
+- [Project Links](#project-links)
+- [Frontend](#frontend)
 - [Features](#features)
 - [Demo](#demo)
 - [Project Structure](#project-structure)
@@ -51,19 +90,23 @@ Detect fraudulent job postings with Machine Learning and Explainable AI.
 
 ## Features
 
-- **Fake Job Detection** — tuned XGBoost classifier trained to spot fraudulent postings
+The complete application includes:
+
+- **AI-powered Fake Job Detection** — tuned XGBoost classifier trained to spot fraudulent postings
+- **XGBoost Classification** — gradient-boosted classifier trained over TF-IDF vectorized text
+- **SHAP Explainability** — per-prediction feature attributions via `TreeExplainer`
 - **Fraud Probability Prediction** — probability that a posting belongs to the *Fake* class
 - **Fraud Risk Score (0–100)** — an interpretable 0–100 risk score for any job description
 - **Risk Level Classification** — Low / Medium / High / Critical severity tiers
-- **SHAP Explainable AI** — per-prediction feature attributions via `TreeExplainer`
 - **Top Contributing Features** — the top 10 features driving each verdict, with direction & impact
 - **FastAPI REST API** — lightweight, high-performance inference backend
 - **Interactive Swagger Documentation** — auto-generated OpenAPI UI at `/docs`
-- **Next.js Frontend** — modern dashboard for submitting descriptions and viewing results
-- **Modern Responsive UI** — Tailwind CSS + shadcn/ui, built mobile-first
-- **Dockerized Deployment** — single-container build with built-in health check
+- **Responsive Next.js Frontend** — modern SaaS dashboard with TypeScript, Tailwind CSS & Framer Motion
+- **REST API Integration** — frontend communicates with the backend over Axios
+- **Dockerized Backend** — single-container build with built-in health check
 - **GitHub Actions CI** — dependency, import & Docker build verification on every push/PR
-- **Render Cloud Deployment** — backend live at a public HTTPS endpoint
+- **Render Deployment** — backend live at a public HTTPS endpoint
+- **Vercel Deployment** — frontend live at [`https://jobclarity.vercel.app/`](https://jobclarity.vercel.app/)
 - **Health Check Endpoint** — `GET /health` reports model & vectorizer readiness
 - **Input Validation** — Pydantic-validated requests (min. description length enforced)
 - **Error Handling** — typed, user-friendly error responses surfaced in the UI
@@ -72,27 +115,33 @@ Detect fraudulent job postings with Machine Learning and Explainable AI.
 
 ## Demo
 
-The application is split into a **Next.js frontend** and a **FastAPI backend**, communicating over a REST API.
+The application is split into a **Next.js frontend** (deployed on Vercel) and a **FastAPI backend** (deployed on Render), communicating over a REST API.
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | Next.js 16, TypeScript, Tailwind CSS, shadcn/ui |
+| **Frontend** | Next.js 16, TypeScript, Tailwind CSS, shadcn/ui, Framer Motion |
 | **Backend** | FastAPI, XGBoost, SHAP, Docker, Render |
 
 ### Architecture Flow
 
-```mermaid
-flowchart TD
-    A[User] --> B[Next.js Frontend]
-    B --> C[Axios API Client]
-    C --> D[FastAPI Backend]
-    D --> E[Text Preprocessing]
-    E --> F[TF-IDF Vectorizer]
-    F --> G[XGBoost Model]
-    G --> H[SHAP Explainability]
-    H --> I[Prediction Response]
-    I --> J[Interactive UI]
 ```
+User
+        │
+        ▼
+Next.js Frontend (Vercel)
+        │
+        │ REST API
+        ▼
+FastAPI Backend (Render)
+        │
+        ▼
+XGBoost Model
+        │
+        ▼
+SHAP Explainability
+```
+
+The **frontend and backend are deployed independently** — the Next.js app runs on Vercel and talks to the FastAPI service on Render over HTTPS, so each layer can be scaled, redeployed, and versioned on its own.
 
 ---
 
@@ -137,13 +186,13 @@ JobClarity/
 ```
 jobclarity-frontend/
 ├── app/
-│   ├── page.tsx            # Landing page (hero + analyzer)
+│   ├── page.tsx            # Landing page (hero + analyzer + report)
 │   ├── layout.tsx          # Root layout
-│   └── globals.css         # Global styles / Tailwind
+│   └── globals.css         # Global styles / Tailwind theme
 ├── components/
-│   ├── layout/             # Navbar, Hero
-│   ├── prediction/         # PredictionCard, RiskBadge, ReasonList
-│   ├── shared/             # Loading, shared UI primitives
+│   ├── layout/             # Navbar, Hero, HeroBackground, Features, Footer
+│   ├── analyzer/           # AnalyzerCard, SampleJobs
+│   ├── prediction/         # PredictionDashboard, PredictionSummary, ReasonList, ...
 │   └── ui/                 # shadcn/ui components (button, card, badge, ...)
 ├── lib/
 │   ├── api/client.ts       # Axios client with typed, friendly error handling
@@ -153,6 +202,8 @@ jobclarity-frontend/
 ├── components.json         # shadcn/ui configuration
 └── package.json
 ```
+
+> **Note:** the frontend is also maintained as its own repository — see the [Frontend](#frontend) section.
 
 </details>
 
@@ -167,6 +218,7 @@ jobclarity-frontend/
 | | [TypeScript](https://www.typescriptlang.org) | Typed JavaScript |
 | | [Tailwind CSS](https://tailwindcss.com) | Utility-first styling |
 | | [shadcn/ui](https://ui.shadcn.com) | Accessible component library |
+| | [Framer Motion](https://www.framer.com/motion/) | UI animations |
 | | [Axios](https://axios-http.com) | HTTP client for API calls |
 | **Backend** | [FastAPI](https://fastapi.tiangolo.com) | Async Python REST framework |
 | | Python 3.12 | Core language |
@@ -179,7 +231,8 @@ jobclarity-frontend/
 | | pandas / numpy | Data processing |
 | **DevOps** | [Docker](https://www.docker.com) | Containerization |
 | | [GitHub Actions](https://github.com/features/actions) | CI/CD |
-| | [Render](https://render.com) | Cloud hosting |
+| | [Render](https://render.com) | Backend cloud hosting |
+| | [Vercel](https://vercel.com) | Frontend cloud hosting |
 | | Git | Version control |
 
 ---
@@ -355,7 +408,8 @@ The API is now live at **http://localhost:8000** — open **http://localhost:800
 ### Frontend
 
 ```bash
-# 1. Navigate to the frontend
+# 1. Clone the frontend repository
+git clone https://github.com/divysaxena24/JobClarity-frontend.git
 cd jobclarity-frontend
 
 # 2. Install dependencies
@@ -377,8 +431,15 @@ The frontend is now live at **http://localhost:3000**.
 
 ## Deployment
 
-- **Backend** — containerized with Docker and deployed to **Render** at `https://jobclarity-0tz8.onrender.com`.
-- **Frontend** — built with Next.js for production (`npm run build`), ready for Vercel/Netlify-style static hosting.
+The frontend and backend are **deployed independently**:
+
+| Layer | Platform | URL |
+|---|---|---|
+| **Backend** | [Render](https://render.com) | [https://jobclarity-0tz8.onrender.com](https://jobclarity-0tz8.onrender.com) |
+| **Frontend** | [Vercel](https://vercel.com) | [https://jobclarity.vercel.app/](https://jobclarity.vercel.app/) |
+
+- **Backend Deployment** — containerized with Docker and deployed to **Render** at `https://jobclarity-0tz8.onrender.com` (Swagger docs at `/docs`).
+- **Frontend Deployment** — built with Next.js (`npm run build`) and deployed to **Vercel** at `https://jobclarity.vercel.app/`.
 - **Dockerized backend** — the production image is identical to the local image (Python 3.12-slim + Uvicorn on port 8000).
 - **GitHub Actions CI** — `.github/workflows/ci.yml` runs on every push/PR to `main`:
   - Python 3.12 setup + dependency installation
@@ -401,7 +462,7 @@ Every `/predict` call returns a structured response powering the frontend dashbo
 | `top_reasons` | `array` | Top 10 SHAP features — `feature`, `impact`, `effect` |
 | `model_version` | `string` | Version of the deployed model (`1.0.0`) |
 
-These are rendered in the UI as the **Prediction Card** (verdict, probability, animated risk gauge) and the **Reason List** (top contributing features with impact direction).
+These are rendered in the UI as the **AI Fraud Detection Report** (verdict, animated risk gauge, probability & confidence indicators) and the **Key Factors Behind the Prediction** panel (top contributing SHAP features with impact direction).
 
 ---
 
@@ -411,7 +472,7 @@ These are rendered in the UI as the **Prediction Card** (verdict, probability, a
 |---|---|
 | Health endpoint | `curl http://localhost:8000/health` → `{"status": "healthy", ...}` |
 | Swagger | Open `http://localhost:8000/docs`, run a test `/predict` call |
-| Frontend integration | Submit a job description on `localhost:3000` and verify the dashboard renders |
+| Frontend integration | Submit a job description on `localhost:3000` and verify the report renders |
 | Docker | `docker compose up --build` and hit `localhost:8000/health` |
 | Render deployment | Query the live API at `https://jobclarity-0tz8.onrender.com/health` |
 | GitHub Actions | View pipeline status on any push/PR to `main` |
@@ -428,7 +489,7 @@ These are rendered in the UI as the **Prediction Card** (verdict, probability, a
 | # | Screen | Description |
 |---|---|---|
 | 1 | **Landing Page** | Next.js hero section with the job-description analyzer |
-| 2 | **Prediction Result** | Verdict card with risk gauge + SHAP reason list |
+| 2 | **Prediction Result** | AI Fraud Detection Report with risk gauge + SHAP factors |
 | 3 | **Swagger UI** | FastAPI auto-generated docs at `/docs` |
 | 4 | **Docker** | Container build & run (`docker compose up --build`) |
 | 5 | **GitHub Actions** | CI workflow passing on `main` |
