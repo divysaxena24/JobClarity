@@ -30,19 +30,19 @@ Detect fraudulent job postings with Machine Learning and Explainable AI.
 
 ---
 
-## 🔗 Project Links
+## Project Links
 
 | Resource | Link |
 |----------|------|
-| 🌐 Live Application | [https://jobclarity.vercel.app/](https://jobclarity.vercel.app/) |
-| 🎨 Frontend Repository | [https://github.com/divysaxena24/JobClarity-frontend](https://github.com/divysaxena24/JobClarity-frontend) |
-| ⚙️ Backend Repository | [https://github.com/divysaxena24/JobClarity](https://github.com/divysaxena24/JobClarity) |
-| 🚀 Backend API | [https://jobclarity-0tz8.onrender.com](https://jobclarity-0tz8.onrender.com) |
-| 📖 Swagger API Docs | [https://jobclarity-0tz8.onrender.com/docs](https://jobclarity-0tz8.onrender.com/docs) |
+| Live Application | [https://jobclarity.vercel.app/](https://jobclarity.vercel.app/) |
+| Frontend Repository | [https://github.com/divysaxena24/JobClarity-frontend](https://github.com/divysaxena24/JobClarity-frontend) |
+| Backend Repository | [https://github.com/divysaxena24/JobClarity](https://github.com/divysaxena24/JobClarity) |
+| Backend API | [https://jobclarity-0tz8.onrender.com](https://jobclarity-0tz8.onrender.com) |
+| Swagger API Docs | [https://jobclarity-0tz8.onrender.com/docs](https://jobclarity-0tz8.onrender.com/docs) |
 
 ---
 
-## 🌐 Frontend
+## Frontend
 
 The frontend of JobClarity is maintained in a separate repository.
 
@@ -68,8 +68,8 @@ The frontend of JobClarity is maintained in a separate repository.
 
 ## Table of Contents
 
-- [Project Links](#-project-links)
-- [Frontend](#-frontend)
+- [Project Links](#project-links)
+- [Frontend](#frontend)
 - [Features](#features)
 - [Demo](#demo)
 - [Project Structure](#project-structure)
@@ -203,7 +203,7 @@ jobclarity-frontend/
 └── package.json
 ```
 
-> **Note:** the frontend is also maintained as its own repository — see the [Frontend](#-frontend) section.
+> **Note:** the frontend is also maintained as its own repository — see the [Frontend](#frontend) section.
 
 </details>
 
