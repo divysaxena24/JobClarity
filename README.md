@@ -442,9 +442,11 @@ The frontend and backend are **deployed independently**:
 - **Frontend Deployment** — built with Next.js (`npm run build`) and deployed to **Vercel** at `https://jobclarity.vercel.app/`.
 - **Dockerized backend** — the production image is identical to the local image (Python 3.12-slim + Uvicorn on port 8000).
 - **GitHub Actions CI** — `.github/workflows/ci.yml` runs on every push/PR to `main`:
-  - Python 3.12 setup + dependency installation
-  - Import verification for `fastapi`, `pandas`, `sklearn`, `xgboost`, `shap`
-  - Docker image build (`jobclarity-ci`) to catch regressions early
+  - Python 3.12 setup with `pip` dependency caching
+  - Import verification for core ML and API frameworks
+  - Full automated test suite execution via `pytest` with 97% branch & statement coverage
+  - Coverage HTML report artifact upload for historical auditability
+  - Production Docker image build (`jobclarity-ci`) to catch regressions early
 - **Automatic deployment on push** — pushing to `main` triggers CI and the deployment pipeline.
 
 ---
