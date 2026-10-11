@@ -23,7 +23,8 @@ class TestFeatureBuilder:
 
         assert "combined_text" in df.columns
         assert len(df["combined_text"]) == len(df)
-        assert df["combined_text"].dtype == object
+        assert pd.api.types.is_string_dtype(df["combined_text"])
+        assert all(isinstance(val, str) for val in df["combined_text"])
 
         # Verify that all 5 text elements appear in the combined text for row 0
         row0_combined = df.loc[0, "combined_text"]
