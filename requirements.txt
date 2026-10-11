@@ -28,6 +28,8 @@ python-dotenv
 
 # Testing
 pytest
+pytest-cov
+httpx
 
 # Code Formatting
 black

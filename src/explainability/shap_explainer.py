@@ -9,46 +9,50 @@ from src.models.model_loader import (
     load_model,
     load_vectorizer
 )
-
 from src.preprocessing.text_cleaner import clean_text
 
-
 # Load model and vectorizer once
-model = load_model()
-vectorizer = load_vectorizer()
-
-# Create SHAP explainer once
-explainer = shap.TreeExplainer(model)
+try:
+    model = load_model()
+    vectorizer = load_vectorizer()
+    explainer = shap.TreeExplainer(model)
+except Exception:
+    model = None
+    vectorizer = None
+    explainer = None
 
 
 def explain_prediction(job_description: str, top_k: int = 10):
     """
     Return the top SHAP features for a prediction.
+    Gracefully returns an empty list if explainability components are unavailable
+    or an error occurs during computation.
     """
+    if explainer is None or vectorizer is None:
+        return []
 
-    cleaned_text = clean_text(job_description)
+    try:
+        cleaned_text = clean_text(job_description)
+        X = vectorizer.transform([cleaned_text])
 
-    X = vectorizer.transform([cleaned_text])
+        shap_values = explainer.shap_values(X)
+        feature_names = vectorizer.get_feature_names_out()
 
-    shap_values = explainer.shap_values(X)
+        values = shap_values[0]
+        top_idx = np.argsort(np.abs(values))[::-1][:top_k]
 
-    feature_names = vectorizer.get_feature_names_out()
+        explanations = []
+        for idx in top_idx:
+            explanations.append({
+                "feature": str(feature_names[idx]),
+                "impact": round(float(values[idx]), 4),
+                "effect": (
+                    "Increases fraud risk"
+                    if values[idx] > 0
+                    else "Decreases fraud risk"
+                )
+            })
 
-    values = shap_values[0]
-
-    top_idx = np.argsort(np.abs(values))[::-1][:top_k]
-
-    explanations = []
-
-    for idx in top_idx:
-        explanations.append({
-            "feature": feature_names[idx],
-            "impact": round(float(values[idx]), 4),
-            "effect": (
-                "Increases fraud risk"
-                if values[idx] > 0
-                else "Decreases fraud risk"
-            )
-        })
-
-    return explanations
+        return explanations
+    except Exception:
+        return []

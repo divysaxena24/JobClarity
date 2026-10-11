@@ -1,0 +1,18 @@
+[run]
+source = src
+branch = True
+omit =
+    src/utils/*
+    src/validation/*
+    src/data/*
+    */__pycache__/*
+    */tests/*
+
+[report]
+show_missing = True
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise NotImplementedError

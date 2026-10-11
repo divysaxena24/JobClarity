@@ -136,6 +136,14 @@ def plot_confusion_matrix(
     plt.close(fig)
 
 
+def _format_path(path: Path) -> str:
+    """Format path relative to PROJECT_ROOT if possible, otherwise return string."""
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def run_evaluation(
     data_path: Path = PROJECT_ROOT / "data" / "processed" / "cleaned_jobs.csv",
     vectorizer_path: Path = PROJECT_ROOT / "models" / "tfidf_vectorizer.pkl",
@@ -152,12 +160,12 @@ def run_evaluation(
     print("=" * 70)
 
     # 1. Load dataset
-    print(f"[1/5] Loading dataset from: {data_path.relative_to(PROJECT_ROOT)}")
+    print(f"[1/5] Loading dataset from: {_format_path(data_path)}")
     df = load_dataset(data_path)
     print(f"      Total records: {len(df):,}, Columns: {len(df.columns)}")
 
     # 2. Load vectorizer & transform
-    print(f"[2/5] Loading TF-IDF vectorizer: {vectorizer_path.relative_to(PROJECT_ROOT)}")
+    print(f"[2/5] Loading TF-IDF vectorizer: {_format_path(vectorizer_path)}")
     if not vectorizer_path.exists():
         raise FileNotFoundError(f"Vectorizer not found at {vectorizer_path}")
     vectorizer = joblib.load(vectorizer_path)
@@ -222,7 +230,7 @@ def run_evaluation(
     output_report_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_report_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
-    print(f"      Report saved: {output_report_path.relative_to(PROJECT_ROOT)}")
+    print(f"      Report saved: {_format_path(output_report_path)}")
 
     # Plot confusion matrix for production model
     cm_arr = np.array(tuned_res["confusion_matrix"]["matrix"])
@@ -231,7 +239,7 @@ def run_evaluation(
         title="Production Tuned XGBoost - Confusion Matrix",
         output_path=output_cm_path,
     )
-    print(f"      Plot saved:   {output_cm_path.relative_to(PROJECT_ROOT)}")
+    print(f"      Plot saved:   {_format_path(output_cm_path)}")
 
     # Also plot baseline confusion matrix if base model exists
     if base_model_path.exists():
@@ -241,7 +249,7 @@ def run_evaluation(
             title="Untuned Baseline XGBoost - Confusion Matrix",
             output_path=base_cm_path,
         )
-        print(f"      Base plot saved: {base_cm_path.relative_to(PROJECT_ROOT)}")
+        print(f"      Base plot saved: {_format_path(base_cm_path)}")
 
     print("=" * 70)
     print("Baseline Evaluation Completed Successfully")

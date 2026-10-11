@@ -6,14 +6,20 @@ from src.models.model_loader import load_model, load_vectorizer
 from src.preprocessing.text_cleaner import clean_text
 
 # Load once when API starts
-model = load_model()
-vectorizer = load_vectorizer()
+try:
+    model = load_model()
+    vectorizer = load_vectorizer()
+except Exception:
+    model = None
+    vectorizer = None
 
 
 def predict_job(job_description: str):
     """
     Predict whether a job posting is Real or Fake.
     """
+    if model is None or vectorizer is None:
+        raise RuntimeError("Model or vectorizer artifact is not loaded.")
 
     # Clean text
     cleaned_text = clean_text(job_description)
@@ -22,13 +28,13 @@ def predict_job(job_description: str):
     X = vectorizer.transform([cleaned_text])
 
     # Prediction
-    prediction = model.predict(X)[0]
+    prediction = int(model.predict(X)[0])
 
     # Probability of Fake class
     probability = float(model.predict_proba(X)[0][1])
 
     # Fraud Risk Score
-    fraud_risk_score = round(probability * 100)
+    fraud_risk_score = int(round(probability * 100))
     top_reasons = explain_prediction(job_description)
 
     # Risk Level
@@ -48,7 +54,4 @@ def predict_job(job_description: str):
         "risk_level": risk,
         "top_reasons": top_reasons,
         "model_version": "1.0.0",
-
     }
-
-    

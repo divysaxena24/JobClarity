@@ -40,6 +40,12 @@ artifacts/
 .vscode/
 .idea/
 
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
 # OS
 .DS_Store
 Thumbs.db

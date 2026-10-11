@@ -468,6 +468,56 @@ These are rendered in the UI as the **AI Fraud Detection Report** (verdict, anim
 
 ## Testing
 
+### Automated Test Suite (Pytest)
+
+JobClarity features a comprehensive automated test suite with **93 tests** covering unit logic, API endpoints, ML pipelines, and regression boundaries with **97% total test coverage**.
+
+```bash
+# 1. Install dependencies (including test dependencies)
+python -m pip install -r requirements.txt
+python -m pip install pytest pytest-cov httpx
+
+# 2. Run all tests with verbose output
+python -m pytest -v
+
+# 3. Run tests with coverage and missing line reports
+python -m pytest --cov=src --cov-report=term-missing
+
+# 4. Generate HTML coverage report
+python -m pytest --cov=src --cov-report=html
+```
+
+#### Test Suite Structure
+
+| Test File | Focus | Test Count |
+|---|---|---|
+| `tests/test_preprocessing.py` | Text cleaning, HTML/URL/phone stripping, Unicode/emoji handling, determinism | 20 |
+| `tests/test_feature_builder.py` | Combined text construction, NaN handling, empty DataFrame safety, TF-IDF vectorizer | 9 |
+| `tests/test_model_loader.py` | Artifact loading, custom paths, corrupted/missing file errors, artifact immutability | 6 |
+| `tests/test_predictor.py` | Real/Fake inference, probability bounds, risk tiers (Low/Med/High/Crit), error states | 14 |
+| `tests/test_explainability.py` | SHAP TreeExplainer, top factor ranking, fallback on missing SHAP/calculation errors | 6 |
+| `tests/test_api.py` | FastAPI routes (`/`, `/health`, `/predict`), status codes, payload validation, shielded errors | 16 |
+| `tests/test_ml_pipeline.py` | Model training, evaluation metrics, confusion matrix plotting, stratified splits, CLI | 10 |
+| `tests/test_regression.py` | Frontend schema compatibility, Pydantic contracts, scam signature stripping, artifact integrity | 12 |
+
+#### Running Targeted Test Suites
+
+```bash
+# Run only unit tests
+pytest -m unit
+
+# Run API integration tests
+pytest -m integration
+
+# Run ML pipeline tests
+pytest -m ml
+
+# Run regression tests
+pytest -m regression
+```
+
+### Manual Verification
+
 | Check | How |
 |---|---|
 | Health endpoint | `curl http://localhost:8000/health` → `{"status": "healthy", ...}` |
