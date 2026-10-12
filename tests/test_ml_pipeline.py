@@ -841,6 +841,139 @@ class TestMLPipeline:
         assert called["max_features"] == 2000
         assert called["text_column"] == "description"
 
+    def test_held_out_evaluation_synthetic_end_to_end(self, tmp_path, synthetic_dataframe):
+        """evaluate_held_out_candidates must evaluate both candidates and majority baseline on held-out split."""
+        import joblib
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from xgboost import XGBClassifier
+        from src.models.evaluate import evaluate_held_out_candidates
+        from src.features.feature_builder import prepare_job_description_text
+
+        # 1. Dataset
+        df = pd.concat([synthetic_dataframe] * 5, ignore_index=True)
+        data_csv = tmp_path / "cleaned_jobs.csv"
+        df.to_csv(data_csv, index=False)
+
+        # 2. Candidate baseline artifacts
+        base_dir = tmp_path / "candidate"
+        base_dir.mkdir(parents=True, exist_ok=True)
+        vec_base = TfidfVectorizer(max_features=20)
+        X_base = vec_base.fit_transform(prepare_job_description_text(df))
+        model_base = XGBClassifier(n_estimators=2, max_depth=2, random_state=42)
+        model_base.fit(X_base, df["fraudulent"])
+        joblib.dump(vec_base, base_dir / "tfidf_vectorizer.pkl")
+        joblib.dump(model_base, base_dir / "xgboost_model.pkl")
+
+        # 3. Candidate tuned artifacts
+        tuned_dir = tmp_path / "candidate_tuned"
+        tuned_dir.mkdir(parents=True, exist_ok=True)
+        joblib.dump(vec_base, tuned_dir / "tfidf_vectorizer.pkl")
+        joblib.dump(model_base, tuned_dir / "xgboost_model_tuned.pkl")
+
+        # 4. Evaluation output directory
+        eval_dir = tmp_path / "evaluation" / "day2"
+
+        results = evaluate_held_out_candidates(
+            data_path=data_csv,
+            baseline_dir=base_dir,
+            tuned_dir=tuned_dir,
+            output_dir=eval_dir,
+            test_size=0.20,
+            random_state=42,
+            save_artifacts=True,
+        )
+
+        # Verify output files exist
+        assert (eval_dir / "final_evaluation_report.json").exists()
+        assert (eval_dir / "baseline_confusion_matrix.png").exists()
+        assert (eval_dir / "tuned_confusion_matrix.png").exists()
+        assert (eval_dir / "majority_class_confusion_matrix.png").exists()
+
+        # Verify evaluations structure
+        report = results["report"]
+        assert "majority_class_baseline" in report["evaluations"]
+        assert "baseline_candidate" in report["evaluations"]
+        assert "tuned_candidate" in report["evaluations"]
+        assert "comparison" in report
+
+        # Verify majority class metrics
+        maj = report["evaluations"]["majority_class_baseline"]["metrics"]
+        assert maj["fraud_precision"] == 0.0
+        assert maj["fraud_recall"] == 0.0
+        assert maj["fraud_f1_score"] == 0.0
+        assert maj["roc_auc"] == 0.5
+
+        # Verify comparison metrics
+        comp = report["comparison"]
+        assert comp["prediction_agreement_rate"] == 1.0
+        assert comp["max_absolute_probability_difference"] == 0.0
+
+    def test_held_out_evaluation_artifact_isolation_guards(self, tmp_path, synthetic_dataframe):
+        """evaluate_held_out_candidates must raise ValueError when output_dir threatens candidate or production dirs."""
+        from src.models.evaluate import evaluate_held_out_candidates, PROJECT_ROOT
+
+        data_csv = tmp_path / "cleaned_jobs.csv"
+        synthetic_dataframe.to_csv(data_csv, index=False)
+
+        base_dir = tmp_path / "candidate"
+        tuned_dir = tmp_path / "candidate_tuned"
+
+        # Guard: Refuse to write to production models/
+        with pytest.raises(ValueError, match="Refusing to write evaluation report into production models directory"):
+            evaluate_held_out_candidates(
+                data_path=data_csv,
+                baseline_dir=base_dir,
+                tuned_dir=tuned_dir,
+                output_dir=PROJECT_ROOT / "models",
+                save_artifacts=False,
+            )
+
+        # Guard: Refuse to overwrite baseline candidate dir
+        with pytest.raises(ValueError, match="Refusing to overwrite baseline candidate directory"):
+            evaluate_held_out_candidates(
+                data_path=data_csv,
+                baseline_dir=base_dir,
+                tuned_dir=tuned_dir,
+                output_dir=base_dir,
+                save_artifacts=False,
+            )
+
+        # Guard: Refuse to overwrite tuned candidate dir
+        with pytest.raises(ValueError, match="Refusing to overwrite tuned candidate directory"):
+            evaluate_held_out_candidates(
+                data_path=data_csv,
+                baseline_dir=base_dir,
+                tuned_dir=tuned_dir,
+                output_dir=tuned_dir,
+                save_artifacts=False,
+            )
+
+    def test_evaluate_cli_held_out_flag(self, tmp_path, monkeypatch):
+        """CLI with --held-out flag should invoke evaluate_held_out_candidates."""
+        import sys
+        import src.models.evaluate as eval_module
+
+        called = {}
+
+        def mock_eval(**kwargs):
+            called.update(kwargs)
+            return {"status": "success"}
+
+        monkeypatch.setattr(eval_module, "evaluate_held_out_candidates", mock_eval)
+
+        test_args = [
+            "evaluate.py",
+            "--held-out",
+            "--data-path", str(tmp_path / "data.csv"),
+            "--output-dir", str(tmp_path / "out_dir"),
+        ]
+        monkeypatch.setattr(sys, "argv", test_args)
+
+        eval_module.main()
+        assert called["data_path"] == tmp_path / "data.csv"
+        assert called["output_dir"] == tmp_path / "out_dir"
+
+
 
 
 
