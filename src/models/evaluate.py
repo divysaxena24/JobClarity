@@ -174,14 +174,15 @@ def run_evaluation(
         from src.features.feature_builder import create_combined_text
         df = create_combined_text(df)
 
-    X = vectorizer.transform(df["combined_text"])
     y = df["fraudulent"]
 
-    # 3. Stratified Split (Reproducing exact project split)
+    # 3. Stratified Split (Reproducing exact project split on raw text first)
     print(f"[3/5] Performing stratified split (test_size={test_size}, random_state={random_state})")
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
+    text_train, text_test, y_train, y_test = train_test_split(
+        df["combined_text"], y, test_size=test_size, random_state=random_state, stratify=y
     )
+    X_train = vectorizer.transform(text_train)
+    X_test = vectorizer.transform(text_test)
     print(f"      Train shape: {X_train.shape}, Test shape: {X_test.shape}")
     print(f"      Test class counts: Real={int((y_test == 0).sum())}, Fake={int((y_test == 1).sum())}")
 
@@ -203,7 +204,8 @@ def run_evaluation(
     }
 
     # Evaluate Untuned Baseline if present
-    if base_model_path.exists():
+    base_res = None
+    if base_model_path and base_model_path.exists():
         base_model = joblib.load(base_model_path)
         base_res = evaluate_model(base_model, X_test, y_test, model_name="Untuned XGBoost Baseline")
         results["evaluations"]["untuned_baseline"] = base_res
@@ -212,18 +214,20 @@ def run_evaluation(
             print(f"  {k:25s}: {v}")
 
     # Evaluate Production Tuned Model
-    if not tuned_model_path.exists():
-        raise FileNotFoundError(f"Tuned model artifact not found at {tuned_model_path}")
-    tuned_model = joblib.load(tuned_model_path)
-    tuned_res = evaluate_model(tuned_model, X_test, y_test, model_name="Production Tuned XGBoost")
-    results["evaluations"]["production_tuned"] = tuned_res
-    print("\n--- Production Tuned Model (xgboost_model_tuned.pkl) ---")
-    for k, v in tuned_res["metrics"].items():
-        print(f"  {k:25s}: {v}")
+    tuned_res = None
+    if tuned_model_path and tuned_model_path.exists():
+        tuned_model = joblib.load(tuned_model_path)
+        tuned_res = evaluate_model(tuned_model, X_test, y_test, model_name="Production Tuned XGBoost")
+        results["evaluations"]["production_tuned"] = tuned_res
+        print("\n--- Production Tuned Model (xgboost_model_tuned.pkl) ---")
+        for k, v in tuned_res["metrics"].items():
+            print(f"  {k:25s}: {v}")
 
-    print("\nConfusion Matrix (Production Tuned):")
-    print(f"  TN: {tuned_res['confusion_matrix']['true_negatives']:,}  |  FP: {tuned_res['confusion_matrix']['false_positives']:,}")
-    print(f"  FN: {tuned_res['confusion_matrix']['false_negatives']:,}  |  TP: {tuned_res['confusion_matrix']['true_positives']:,}")
+        print("\nConfusion Matrix (Production Tuned):")
+        print(f"  TN: {tuned_res['confusion_matrix']['true_negatives']:,}  |  FP: {tuned_res['confusion_matrix']['false_positives']:,}")
+        print(f"  FN: {tuned_res['confusion_matrix']['false_negatives']:,}  |  TP: {tuned_res['confusion_matrix']['true_positives']:,}")
+    elif base_model_path is None or not base_model_path.exists():
+        raise FileNotFoundError(f"Neither tuned model ({tuned_model_path}) nor baseline model ({base_model_path}) found.")
 
     # 5. Save Artifacts
     print(f"\n[5/5] Saving evaluation report and plots...")
@@ -232,17 +236,26 @@ def run_evaluation(
         json.dump(results, f, indent=2)
     print(f"      Report saved: {_format_path(output_report_path)}")
 
-    # Plot confusion matrix for production model
-    cm_arr = np.array(tuned_res["confusion_matrix"]["matrix"])
-    plot_confusion_matrix(
-        cm_arr,
-        title="Production Tuned XGBoost - Confusion Matrix",
-        output_path=output_cm_path,
-    )
-    print(f"      Plot saved:   {_format_path(output_cm_path)}")
+    # Plot confusion matrix
+    if tuned_res is not None:
+        cm_arr = np.array(tuned_res["confusion_matrix"]["matrix"])
+        plot_confusion_matrix(
+            cm_arr,
+            title="Production Tuned XGBoost - Confusion Matrix",
+            output_path=output_cm_path,
+        )
+        print(f"      Plot saved:   {_format_path(output_cm_path)}")
+    elif base_res is not None:
+        cm_arr = np.array(base_res["confusion_matrix"]["matrix"])
+        plot_confusion_matrix(
+            cm_arr,
+            title="Untuned Baseline XGBoost - Confusion Matrix",
+            output_path=output_cm_path,
+        )
+        print(f"      Plot saved:   {_format_path(output_cm_path)}")
 
-    # Also plot baseline confusion matrix if base model exists
-    if base_model_path.exists():
+    # Also plot baseline confusion matrix if base model exists and tuned model was also plotted
+    if base_res is not None and tuned_res is not None:
         base_cm_path = PROJECT_ROOT / "artifacts" / "untuned_baseline_confusion_matrix.png"
         plot_confusion_matrix(
             np.array(base_res["confusion_matrix"]["matrix"]),

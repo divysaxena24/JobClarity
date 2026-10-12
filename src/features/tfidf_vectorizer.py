@@ -32,3 +32,50 @@ def create_tfidf_vectorizer(
     )
 
     return vectorizer
+
+
+def fit_tfidf_vectorizer(
+    vectorizer: TfidfVectorizer,
+    train_text,
+):
+    """
+    Fit TF-IDF vectorizer exclusively on training text data.
+    Ensures zero data leakage from validation or test splits.
+
+    Parameters
+    ----------
+    vectorizer : TfidfVectorizer
+        Configured TF-IDF vectorizer instance.
+    train_text : Iterable[str]
+        Training corpus exclusively. Never pass test/validation text.
+
+    Returns
+    -------
+    tuple
+        (fitted_vectorizer, X_train)
+    """
+    X_train = vectorizer.fit_transform(train_text)
+    return vectorizer, X_train
+
+
+def transform_text(
+    vectorizer: TfidfVectorizer,
+    text,
+):
+    """
+    Transform evaluation or test text using an already-fitted vectorizer.
+    Guarantees no re-fitting or vocabulary leakage occurs.
+
+    Parameters
+    ----------
+    vectorizer : TfidfVectorizer
+        Fitted TF-IDF vectorizer.
+    text : Iterable[str]
+        Evaluation, test, or inference text.
+
+    Returns
+    -------
+    scipy.sparse matrix
+        Transformed TF-IDF feature matrix.
+    """
+    return vectorizer.transform(text)

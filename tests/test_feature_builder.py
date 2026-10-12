@@ -7,8 +7,15 @@ import pandas as pd
 import pytest
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.features.feature_builder import create_combined_text
-from src.features.tfidf_vectorizer import create_tfidf_vectorizer
+from src.features.feature_builder import (
+    create_combined_text,
+    prepare_job_description_text,
+)
+from src.features.tfidf_vectorizer import (
+    create_tfidf_vectorizer,
+    fit_tfidf_vectorizer,
+    transform_text,
+)
 from src.preprocessing.text_cleaner import clean_text
 
 
@@ -115,3 +122,68 @@ class TestFeatureBuilder:
         assert "https" not in cleaned
         assert "123" not in cleaned
         assert cleaned == "urgent work from home at call"
+
+    def test_fit_tfidf_vectorizer_and_transform_text(self, tiny_corpus):
+        """fit_tfidf_vectorizer should fit on train corpus and transform_text should transform without refitting."""
+        train_corpus = tiny_corpus[:3]
+        test_corpus = tiny_corpus[3:]
+
+        vec = create_tfidf_vectorizer(max_features=10, ngram_range=(1, 1))
+        fitted_vec, X_train = fit_tfidf_vectorizer(vec, train_corpus)
+
+        assert fitted_vec is vec
+        assert X_train.shape[0] == len(train_corpus)
+        train_vocab = set(fitted_vec.vocabulary_.keys())
+
+        # Transform test corpus
+        X_test = transform_text(fitted_vec, test_corpus)
+        assert X_test.shape[0] == len(test_corpus)
+        assert X_test.shape[1] == X_train.shape[1]
+
+        # Vocabulary must remain strictly unchanged after transform
+        assert set(fitted_vec.vocabulary_.keys()) == train_vocab
+
+    def test_prepare_job_description_text_string_parity(self):
+        """String input should undergo exact clean_text preprocessing matching inference."""
+        raw_text = "<b>Senior Developer</b> needed! Visit https://example.com or call 123-456-7890."
+        prepared = prepare_job_description_text(raw_text)
+        expected = clean_text(raw_text)
+
+        assert prepared == expected
+        assert "senior developer needed visit or call" in prepared
+        assert "<b>" not in prepared
+        assert "http" not in prepared
+
+    def test_prepare_job_description_text_dataframe(self, synthetic_dataframe):
+        """DataFrame input should extract description column and clean all rows consistently."""
+        df = synthetic_dataframe.copy()
+        prepared_series = prepare_job_description_text(df, text_column="description")
+
+        assert isinstance(prepared_series, pd.Series)
+        assert len(prepared_series) == len(df)
+        for i, val in enumerate(prepared_series):
+            assert val == clean_text(df.loc[i, "description"])
+
+    def test_prepare_job_description_text_handles_nan_gracefully(self):
+        """NaN descriptions should become empty strings without inventing text or failing."""
+        df = pd.DataFrame({"description": ["Valid description text", None, np.nan, ""]})
+        res = prepare_job_description_text(df)
+
+        assert len(res) == 4
+        assert res.iloc[0] == "valid description text"
+        assert res.iloc[1] == ""
+        assert res.iloc[2] == ""
+        assert res.iloc[3] == ""
+
+    def test_prepare_job_description_text_missing_column_raises(self):
+        """DataFrame missing required description column should raise KeyError."""
+        df = pd.DataFrame({"random_col": ["Some text"]})
+        with pytest.raises(KeyError, match="Required column 'description' not found"):
+            prepare_job_description_text(df, text_column="description")
+
+    def test_prepare_job_description_text_unsupported_type_raises(self):
+        """Non-supported input types should raise TypeError."""
+        with pytest.raises(TypeError, match="Unsupported data type"):
+            prepare_job_description_text(12345)
+
+
