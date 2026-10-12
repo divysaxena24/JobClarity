@@ -338,6 +338,12 @@ from src.models.hyperparameter_tuner import (
     tune_xgboost_pipeline,
 )
 
+# Re-export threshold optimization utilities
+from src.models.threshold_optimizer import (
+    generate_oof_probabilities,
+    optimize_decision_threshold,
+)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -347,6 +353,11 @@ def main():
         "--tune",
         action="store_true",
         help="Run stratified cross-validation hyperparameter tuning pipeline instead of baseline.",
+    )
+    parser.add_argument(
+        "--threshold-optimize",
+        action="store_true",
+        help="Run Session 5 decision-threshold optimization using OOF predictions.",
     )
     parser.add_argument(
         "--data-path",
@@ -392,7 +403,20 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.tune:
+    if args.threshold_optimize:
+        out_dir = args.output_dir or (
+            PROJECT_ROOT / "artifacts" / "evaluation" / "day2" / "threshold_optimization"
+        )
+        optimize_decision_threshold(
+            data_path=args.data_path,
+            output_dir=out_dir,
+            test_size=args.test_size,
+            n_splits=args.n_splits,
+            random_state=args.random_state,
+            max_features=args.max_features,
+            text_column=args.text_column,
+        )
+    elif args.tune:
         out_dir = args.output_dir or (PROJECT_ROOT / "artifacts" / "candidate" / "tuned")
         tune_xgboost_pipeline(
             data_path=args.data_path,

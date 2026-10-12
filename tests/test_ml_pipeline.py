@@ -974,6 +974,311 @@ class TestMLPipeline:
         assert called["output_dir"] == tmp_path / "out_dir"
 
 
+# ---------------------------------------------------------------------------
+# Session 5 — Decision-Threshold Analysis Tests
+# ---------------------------------------------------------------------------
 
+@pytest.mark.ml
+class TestThresholdOptimizer:
+    """Tests for src/models/threshold_optimizer.py (Session 5)."""
+
+    @pytest.fixture()
+    def large_synthetic_df(self, synthetic_dataframe):
+        """Return a 60-row replica of the synthetic dataset."""
+        return pd.concat([synthetic_dataframe] * 10, ignore_index=True)
+
+    # ------------------------------------------------------------------
+    # 1. OOF probabilities — array properties
+    # ------------------------------------------------------------------
+    def test_generate_oof_probabilities_array_shape_and_range(self, large_synthetic_df):
+        """OOF probs must cover every training sample and stay in [0, 1]."""
+        from src.models.threshold_optimizer import generate_oof_probabilities
+        from src.models.hyperparameter_tuner import CandidateConfig
+        from src.features.feature_builder import prepare_job_description_text
+
+        candidate = CandidateConfig(
+            candidate_id="test_cand",
+            name="Test Candidate",
+            n_estimators=5,
+            max_depth=2,
+            learning_rate=0.1,
+            subsample=1.0,
+            colsample_bytree=1.0,
+            scale_pos_weight=1.0,
+        )
+
+        X_text = prepare_job_description_text(large_synthetic_df)
+        y = large_synthetic_df["fraudulent"].astype(int).to_numpy()
+
+        oof_probs, oof_true = generate_oof_probabilities(
+            X_train_text=X_text,
+            y_train=y,
+            candidate=candidate,
+            n_splits=3,
+            random_state=42,
+            max_features=50,
+        )
+
+        assert oof_probs.shape == y.shape, "OOF prob array must cover all training samples."
+        assert oof_true.shape == y.shape
+        assert not np.isnan(oof_probs).any(), "Some OOF slots were not filled."
+        assert (oof_probs >= 0).all() and (oof_probs <= 1).all()
+        np.testing.assert_array_equal(oof_true, y)
+
+    # ------------------------------------------------------------------
+    # 2. OOF probabilities — leakage invariant
+    # ------------------------------------------------------------------
+    def test_generate_oof_probabilities_no_test_leakage(self, large_synthetic_df):
+        """
+        Independent fold fits must produce differing per-fold probability
+        distributions.  If a single global model were used (leakage), all
+        fold means would be identical.
+        """
+        from src.models.threshold_optimizer import generate_oof_probabilities
+        from src.models.hyperparameter_tuner import CandidateConfig
+        from src.features.feature_builder import prepare_job_description_text
+        from sklearn.model_selection import StratifiedKFold
+
+        candidate = CandidateConfig(
+            candidate_id="leakage_check",
+            name="Leakage Check",
+            n_estimators=5,
+            max_depth=2,
+            learning_rate=0.1,
+            subsample=1.0,
+            colsample_bytree=1.0,
+            scale_pos_weight=1.0,
+        )
+
+        X_text = prepare_job_description_text(large_synthetic_df)
+        y = large_synthetic_df["fraudulent"].astype(int).to_numpy()
+
+        oof_probs, _ = generate_oof_probabilities(
+            X_train_text=X_text,
+            y_train=y,
+            candidate=candidate,
+            n_splits=3,
+            random_state=42,
+            max_features=50,
+        )
+
+        skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+        fold_prob_means = [
+            oof_probs[val_idx].mean()
+            for _, val_idx in skf.split(X_text, y)
+        ]
+
+        assert len(set(round(m, 6) for m in fold_prob_means)) > 1, (
+            "All folds produced identical mean probabilities — suggests a shared model "
+            "(leakage). Fold-safe fitting should produce differing distributions."
+        )
+
+    # ------------------------------------------------------------------
+    # 3. evaluate_threshold — metric correctness
+    # ------------------------------------------------------------------
+    def test_evaluate_threshold_metric_correctness(self):
+        """evaluate_threshold must compute TP/FP/FN/TN and derived metrics correctly."""
+        from src.models.threshold_optimizer import evaluate_threshold
+
+        y_true = np.array([1, 1, 1, 1, 0, 0, 0, 0])
+        y_prob = np.array([0.9, 0.8, 0.3, 0.2, 0.6, 0.4, 0.1, 0.05])
+
+        # At threshold=0.5: preds = [1,1,0,0,1,0,0,0] → TP=2, FP=1, FN=2, TN=3
+        result = evaluate_threshold(y_true, y_prob, threshold=0.5)
+
+        assert result["threshold"] == 0.5
+        assert result["true_positives"] == 2
+        assert result["false_positives"] == 1
+        assert result["false_negatives"] == 2
+        assert result["true_negatives"] == 3
+        assert abs(result["fraud_precision"] - round(2 / 3, 4)) < 1e-3
+        assert abs(result["fraud_recall"] - 0.5) < 1e-3
+        assert result["confusion_matrix"] == [[3, 1], [2, 2]]
+
+    # ------------------------------------------------------------------
+    # 4. compute_pareto_optimal_points — correctness
+    # ------------------------------------------------------------------
+    def test_compute_pareto_optimal_points(self):
+        """Pareto function should exclude points dominated on both P and R."""
+        from src.models.threshold_optimizer import compute_pareto_optimal_points
+
+        rows = [
+            # dominated by B (higher P and higher R)
+            {"threshold": 0.5, "fraud_precision": 0.6, "fraud_recall": 0.5, "fraud_f1": 0.55},
+            # Pareto-optimal (highest precision)
+            {"threshold": 0.8, "fraud_precision": 0.9, "fraud_recall": 0.3, "fraud_f1": 0.45},
+            # Pareto-optimal (highest recall)
+            {"threshold": 0.2, "fraud_precision": 0.4, "fraud_recall": 0.95, "fraud_f1": 0.56},
+            # Pareto-optimal (balances P and R; not dominated by B or C)
+            {"threshold": 0.35, "fraud_precision": 0.7, "fraud_recall": 0.7, "fraud_f1": 0.70},
+        ]
+
+        pareto = compute_pareto_optimal_points(rows)
+        pareto_thresholds = {r["threshold"] for r in pareto}
+
+        # 0.5 is dominated by 0.35 (higher P=0.7>0.6 AND higher R=0.7>0.5)
+        assert 0.5 not in pareto_thresholds, "Dominated point should not be Pareto-optimal."
+        # All others are non-dominated
+        for thr in (0.8, 0.2, 0.35):
+            assert thr in pareto_thresholds, f"Threshold {thr} should be Pareto-optimal."
+
+        # Sorted by ascending recall
+        recalls = [r["fraud_recall"] for r in pareto]
+        assert recalls == sorted(recalls)
+
+    # ------------------------------------------------------------------
+    # 5. Full optimize_decision_threshold — no criterion (Pareto-only)
+    # ------------------------------------------------------------------
+    def test_optimize_decision_threshold_no_criterion(self, tmp_path, large_synthetic_df):
+        """When criterion=None, selected_threshold must be None; Pareto points must be present."""
+        from src.models.threshold_optimizer import optimize_decision_threshold
+        import json
+
+        data_csv = tmp_path / "cleaned_jobs.csv"
+        large_synthetic_df.to_csv(data_csv, index=False)
+
+        result = optimize_decision_threshold(
+            data_path=data_csv,
+            output_dir=tmp_path / "thr_opt",
+            test_size=0.20,
+            n_splits=3,
+            random_state=42,
+            max_features=50,
+            criterion=None,
+            save_artifacts=True,
+        )
+
+        # No threshold silently selected
+        assert result["selected_threshold"] is None
+
+        # Pareto points exist and are a subset of grid results
+        assert "pareto_points" in result
+        assert len(result["pareto_points"]) >= 1
+
+        # Required keys
+        assert not np.isnan(result["oof_probs"]).any()
+        assert len(result["threshold_results"]) >= 1
+
+        # Output files
+        out = tmp_path / "thr_opt"
+        assert (out / "threshold_analysis_report.json").exists()
+        assert (out / "threshold_grid_summary.csv").exists()
+        assert (out / "pareto_optimal_points.csv").exists()
+
+        # Report structure
+        with open(out / "threshold_analysis_report.json", encoding="utf-8") as f:
+            report = json.load(f)
+
+        assert report["metadata"]["pipeline"] == "day2_session5_threshold_analysis"
+        assert report["metadata"]["oof_cv_strategy"]["leakage_free"] is True
+        assert report["metadata"]["threshold_selection_policy"]["criterion_supplied"] is None
+        assert report["selected_threshold"] is None
+        assert "pareto_optimal_points" in report
+
+        # Every grid row has required fields
+        for row in report["threshold_grid_results"]:
+            for key in ("threshold", "fraud_precision", "fraud_recall", "fraud_f1", "confusion_matrix"):
+                assert key in row
+
+        # Test set is marked as isolated
+        assert "not evaluated" in report["metadata"]["held_out_test_set"]["note"].lower()
+
+    # ------------------------------------------------------------------
+    # 6. optimize_decision_threshold — with explicit criterion
+    # ------------------------------------------------------------------
+    def test_optimize_decision_threshold_with_criterion(self, tmp_path, large_synthetic_df):
+        """When a named criterion is supplied, selected_threshold must be populated with rationale."""
+        from src.models.threshold_optimizer import (
+            optimize_decision_threshold,
+            ThresholdSelectionCriterion,
+        )
+
+        data_csv = tmp_path / "cleaned_jobs.csv"
+        large_synthetic_df.to_csv(data_csv, index=False)
+
+        result = optimize_decision_threshold(
+            data_path=data_csv,
+            output_dir=tmp_path / "thr_criterion",
+            test_size=0.20,
+            n_splits=3,
+            random_state=42,
+            max_features=50,
+            criterion=ThresholdSelectionCriterion.MAX_F1,
+            save_artifacts=False,
+        )
+
+        sel = result["selected_threshold"]
+        assert sel is not None, "selected_threshold should be populated when criterion is set."
+        assert sel["criterion"] == "max_f1"
+        assert "rationale" in sel
+        assert "warning" in sel  # must flag that this has not been test-evaluated
+        assert 0.0 < sel["threshold"] < 1.0
+        assert "metrics" in sel
+
+        # The report must record the criterion name
+        report = result["report"]
+        assert report["metadata"]["threshold_selection_policy"]["criterion_supplied"] == "max_f1"
+
+    # ------------------------------------------------------------------
+    # 7. Artifact isolation guards
+    # ------------------------------------------------------------------
+    def test_optimize_decision_threshold_artifact_guards(self, tmp_path, large_synthetic_df):
+        """optimize_decision_threshold must refuse writes to protected directories."""
+        from src.models.threshold_optimizer import optimize_decision_threshold, PROJECT_ROOT
+
+        data_csv = tmp_path / "cleaned_jobs.csv"
+        large_synthetic_df.to_csv(data_csv, index=False)
+
+        with pytest.raises(ValueError, match="production models directory"):
+            optimize_decision_threshold(
+                data_path=data_csv,
+                output_dir=PROJECT_ROOT / "models",
+                save_artifacts=False,
+            )
+
+        with pytest.raises(ValueError, match="baseline candidate directory"):
+            optimize_decision_threshold(
+                data_path=data_csv,
+                output_dir=PROJECT_ROOT / "artifacts" / "candidate",
+                save_artifacts=False,
+            )
+
+    # ------------------------------------------------------------------
+    # 8. CLI --threshold-optimize flag dispatches correctly
+    # ------------------------------------------------------------------
+    def test_threshold_optimize_cli_flag(self, tmp_path, monkeypatch):
+        """--threshold-optimize CLI flag must dispatch to optimize_decision_threshold."""
+        import sys
+        import src.models.model_trainer as trainer_module
+
+        called = {}
+
+        def mock_optimize(**kwargs):
+            called.update(kwargs)
+            return {"status": "ok"}
+
+        monkeypatch.setattr(trainer_module, "optimize_decision_threshold", mock_optimize)
+
+        test_args = [
+            "model_trainer.py",
+            "--threshold-optimize",
+            "--data-path", str(tmp_path / "jobs.csv"),
+            "--output-dir", str(tmp_path / "thr_out"),
+            "--test-size", "0.20",
+            "--n-splits", "5",
+            "--random-state", "42",
+            "--max-features", "5000",
+        ]
+        monkeypatch.setattr(sys, "argv", test_args)
+
+        trainer_module.main()
+
+        assert called["data_path"] == tmp_path / "jobs.csv"
+        assert called["output_dir"] == tmp_path / "thr_out"
+        assert called["test_size"] == 0.20
+        assert called["n_splits"] == 5
+        assert called["random_state"] == 42
+        assert called["max_features"] == 5000
+        assert called["text_column"] == "description"
 
 
