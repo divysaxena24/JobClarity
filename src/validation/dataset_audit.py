@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_object_dtype, is_string_dtype
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.model_selection import train_test_split
@@ -66,9 +67,9 @@ def audit_missingness(
         series = df[col]
         null_count = int(series.isna().sum())
 
-        if empty_strings_as_missing and series.dtype == object:
-            empty_str_count = int((series.fillna("").astype(str).str.strip() == "").sum())
-            total_missing = empty_str_count
+        if empty_strings_as_missing and (is_string_dtype(series.dtype) or is_object_dtype(series.dtype)):
+            empty_str_count = int((series.dropna().astype(str).str.strip() == "").sum())
+            total_missing = null_count + empty_str_count
         else:
             total_missing = null_count
 

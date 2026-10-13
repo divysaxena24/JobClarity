@@ -59,6 +59,39 @@ class TestDatasetAudit:
         assert res["per_column"]["company_profile"]["missing_percentage"] == 20.0
         assert res["per_column"]["title"]["missing_count"] == 0
 
+    def test_audit_missingness_string_dtype_and_whitespace(self):
+        """audit_missingness should detect whitespace-only strings under StringDtype."""
+        df = pd.DataFrame(
+            {
+                "text_col": pd.Series(["valid", "   ", "\t\n", "another"], dtype="string"),
+                "num_col": [1, 2, 3, 4],
+            }
+        )
+        res = audit_missingness(df, empty_strings_as_missing=True)
+        assert res["per_column"]["text_col"]["missing_count"] == 2
+        assert res["per_column"]["text_col"]["missing_percentage"] == 50.0
+        assert res["per_column"]["num_col"]["missing_count"] == 0
+
+    def test_audit_missingness_mixed_nan_and_empty(self):
+        """audit_missingness counts both NaN and empty string without double counting."""
+        df = pd.DataFrame(
+            {
+                "mixed_col": ["valid", np.nan, "", "   ", "ok"],
+                "num_col": [1.0, np.nan, 3.0, 4.0, 5.0],
+            }
+        )
+        res_enabled = audit_missingness(df, empty_strings_as_missing=True)
+        # NaN (1) + "" (1) + "   " (1) = 3
+        assert res_enabled["per_column"]["mixed_col"]["missing_count"] == 3
+        assert res_enabled["per_column"]["mixed_col"]["missing_percentage"] == 60.0
+        # num_col has 1 NaN
+        assert res_enabled["per_column"]["num_col"]["missing_count"] == 1
+
+        # With empty_strings_as_missing=False, only NaN is counted
+        res_disabled = audit_missingness(df, empty_strings_as_missing=False)
+        assert res_disabled["per_column"]["mixed_col"]["missing_count"] == 1
+        assert res_disabled["per_column"]["num_col"]["missing_count"] == 1
+
     def test_audit_duplicates_detects_conflicts(self, sample_audit_dataframe):
         """audit_duplicates should detect exact duplicates and conflicting label clusters."""
         res = audit_duplicates(sample_audit_dataframe, text_column="description", target_column="fraudulent")
