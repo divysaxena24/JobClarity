@@ -3,7 +3,6 @@ source = src
 branch = True
 omit =
     src/utils/*
-    src/validation/*
     src/data/*
     */__pycache__/*
     */tests/*
