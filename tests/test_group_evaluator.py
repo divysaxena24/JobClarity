@@ -232,3 +232,91 @@ class TestGroupEvaluator:
         # Production model safety check: production models directory must remain untouched
         prod_models = Path("models").resolve()
         assert prod_models.exists()
+
+        # Day 3 candidate artifacts must exist in output_dir
+        model_artifact = out_dir / "candidate_xgboost_model.joblib"
+        vec_artifact = out_dir / "candidate_tfidf_vectorizer.joblib"
+        assert model_artifact.exists()
+        assert vec_artifact.exists()
+
+    def test_generate_description_groups_empty_policy(self):
+        """Empty or whitespace-only descriptions receive distinct group IDs per documented policy."""
+        df = pd.DataFrame({
+            "description": ["", "   ", "\t\n", "Regular valid job description."],
+            "fraudulent": [0, 0, 1, 0],
+        })
+        groups = generate_description_groups(df, text_column="description")
+        assert len(groups) == 4
+        # Empty rows must not share group IDs with each other
+        assert groups.iloc[0] != groups.iloc[1]
+        assert groups.iloc[1] != groups.iloc[2]
+        assert groups.iloc[0].startswith("empty_")
+        assert groups.iloc[1].startswith("empty_")
+        assert groups.iloc[2].startswith("empty_")
+        # Valid description has non-empty hash
+        assert not groups.iloc[3].startswith("empty_")
+
+    def test_create_group_split_reproducibility(self, synthetic_group_df):
+        """create_group_split is strictly reproducible with the same seed."""
+        tr1, te1, _ = create_group_split(synthetic_group_df, n_splits=3, test_fold=0, random_state=42)
+        tr2, te2, _ = create_group_split(synthetic_group_df, n_splits=3, test_fold=0, random_state=42)
+        tr3, te3, _ = create_group_split(synthetic_group_df, n_splits=3, test_fold=0, random_state=99)
+
+        pd.testing.assert_frame_equal(tr1, tr2)
+        pd.testing.assert_frame_equal(te1, te2)
+        # Different seed yields different partitions
+        assert not tr1.index.equals(tr3.index)
+
+    def test_evaluate_group_candidate_confusion_matrix_row_counts(self, synthetic_group_df):
+        """Metrics and confusion matrix strictly account for all test rows."""
+        train_df, test_df, _ = create_group_split(synthetic_group_df, n_splits=2, test_fold=0, random_state=42)
+        eval_res = evaluate_group_candidate(train_df, test_df, max_features=50, random_state=42)
+
+        cm = eval_res["confusion_matrix"]
+        total_eval_samples = cm["true_negatives"] + cm["false_positives"] + cm["false_negatives"] + cm["true_positives"]
+        assert total_eval_samples == len(test_df)
+        assert eval_res["test_samples"] == len(test_df)
+        assert eval_res["class_distribution"]["legitimate_0"] == int((test_df["fraudulent"] == 0).sum())
+        assert eval_res["class_distribution"]["fraudulent_1"] == int((test_df["fraudulent"] == 1).sum())
+
+    def test_tfidf_fitted_on_training_data_only(self, tmp_path):
+        """TF-IDF vectorizer vocabulary contains only terms from training descriptions."""
+        train_df = pd.DataFrame({
+            "description": ["python developer machine learning pipeline engineer", "backend cloud fastapi"],
+            "fraudulent": [0, 0],
+        })
+        test_df = pd.DataFrame({
+            "description": ["exclusive novelunseentoken quantum cybersecurity", "exotic crypto transaction"],
+            "fraudulent": [1, 1],
+        })
+
+        eval_res = evaluate_group_candidate(
+            train_df,
+            test_df,
+            max_features=100,
+            random_state=42,
+            save_artifacts_dir=tmp_path,
+        )
+
+        vec_path = Path(eval_res["saved_artifacts"]["vectorizer_path"])
+        import joblib
+        saved_vec = joblib.load(vec_path)
+
+        vocab = set(saved_vec.vocabulary_.keys())
+        # Training words must be present
+        assert "python" in vocab or "developer" in vocab
+        # Unseen test words must NOT be in vocabulary
+        assert "novelunseentoken" not in vocab
+        assert "quantum" not in vocab
+        assert "exotic" not in vocab
+
+    def test_conflicting_groups_detail_in_metadata(self, synthetic_group_df):
+        """Metadata includes structured conflicting_groups_detail with partition placement."""
+        _, _, meta = create_group_split(synthetic_group_df, n_splits=3, test_fold=0, random_state=42)
+        assert "conflicting_groups_detail" in meta
+        details = meta["conflicting_groups_detail"]
+        assert len(details) == 1
+        cg = details[0]
+        assert cg["occurrences"] == 3
+        assert cg["partition"] in ["train", "test"]
+        assert cg["label_distribution"] == {0: 2, 1: 1}

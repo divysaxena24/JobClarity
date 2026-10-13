@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -66,6 +67,9 @@ def generate_description_groups(
     All records sharing the same normalized description receive identical group IDs,
     ensuring they are placed in the same partition.
 
+    Empty or unusable descriptions receive distinct unique group IDs (e.g. 'empty_{index}')
+    so they are not erroneously grouped together as copies of the same template.
+
     Parameters
     ----------
     df : pd.DataFrame
@@ -85,7 +89,11 @@ def generate_description_groups(
         return pd.Series(dtype=str, index=df.index)
 
     cleaned_series = df[text_column].fillna("").astype(str).apply(clean_text)
-    return cleaned_series.apply(lambda s: hashlib.sha256(s.encode("utf-8")).hexdigest()[:16])
+    group_ids = [
+        f"empty_{idx}" if not text else hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+        for idx, text in zip(df.index, cleaned_series)
+    ]
+    return pd.Series(group_ids, index=df.index, dtype=str)
 
 
 def create_group_split(
@@ -177,6 +185,17 @@ def create_group_split(
     conflicting_groups_in_train = [g for g in conflicting_group_ids if g in train_groups]
     conflicting_groups_in_test = [g for g in conflicting_group_ids if g in test_groups]
 
+    conflicting_details = []
+    for cg in conflicting_group_ids:
+        sub_df = df[groups == cg]
+        conflicting_details.append({
+            "group_id": cg,
+            "occurrences": int(len(sub_df)),
+            "partition": "train" if cg in train_groups else "test",
+            "label_distribution": {int(k): int(v) for k, v in sub_df[target_column].value_counts().items()},
+            "sample_text": str(sub_df[text_column].iloc[0])[:120],
+        })
+
     total_records = len(df)
     train_records = len(train_df)
     test_records = len(test_df)
@@ -193,7 +212,7 @@ def create_group_split(
             "test_fold": test_fold,
             "random_state": random_state,
             "text_column": text_column,
-            "group_definition": "SHA-256 hash prefix (16 chars) of clean_text(description)",
+            "group_definition": "SHA-256 hash prefix (16 chars) of clean_text(description); isolated 'empty_{idx}' IDs for empty descriptions",
         },
         "dataset_summary": {
             "total_records": total_records,
@@ -202,6 +221,7 @@ def create_group_split(
             "conflicting_groups_in_train": len(conflicting_groups_in_train),
             "conflicting_groups_in_test": len(conflicting_groups_in_test),
         },
+        "conflicting_groups_detail": conflicting_details,
         "train_partition": {
             "records": train_records,
             "record_ratio": round(train_records / total_records, 4),
@@ -236,6 +256,7 @@ def evaluate_group_candidate(
     max_features: int = 10000,
     ngram_range: tuple[int, int] = (1, 2),
     random_state: int = 42,
+    save_artifacts_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """
     Train and evaluate a candidate baseline XGBoost model strictly on group-held-out partitions.
@@ -313,7 +334,7 @@ def evaluate_group_candidate(
     report_dict = classification_report(y_test, y_pred, output_dict=True, zero_division=0)
     report_str = classification_report(y_test, y_pred, digits=4, zero_division=0)
 
-    return {
+    res = {
         "model_name": "Group-Aware Baseline XGBoost (Description-Only)",
         "test_samples": int(len(y_test)),
         "class_distribution": {
@@ -339,6 +360,20 @@ def evaluate_group_candidate(
         "classification_report_str": report_str,
         "decision_threshold": 0.5,
     }
+
+    if save_artifacts_dir is not None:
+        save_dir = Path(save_artifacts_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        model_path = save_dir / "candidate_xgboost_model.joblib"
+        vec_path = save_dir / "candidate_tfidf_vectorizer.joblib"
+        joblib.dump(model, model_path)
+        joblib.dump(vectorizer, vec_path)
+        res["saved_artifacts"] = {
+            "model_path": str(model_path),
+            "vectorizer_path": str(vec_path),
+        }
+
+    return res
 
 
 def analyze_near_duplicate_risks(
@@ -401,7 +436,7 @@ def analyze_near_duplicate_risks(
 
 def run_group_aware_evaluation(
     cleaned_data_path: Path | str,
-    output_dir: Path | str | None = None,
+    output_dir: Path | str | None = "artifacts/evaluation/day3/group_aware",
     n_splits: int = 5,
     test_fold: int = 0,
     random_state: int = 42,
@@ -414,14 +449,14 @@ def run_group_aware_evaluation(
     2. Builds group-aware split using StratifiedGroupKFold on exact description hashes.
     3. Evaluates XGBoost candidate strictly on training descriptions and held-out test partition.
     4. Computes near-duplicate risk assessment.
-    5. Saves split metadata, evaluation report JSON, and Markdown summary.
+    5. Saves split metadata, evaluation report JSON, model/vectorizer artifacts, and Markdown summary.
 
     Parameters
     ----------
     cleaned_data_path : Path or str
         Path to processed dataset (cleaned_jobs.csv).
     output_dir : Path or str, optional
-        Target directory for artifacts (default: artifacts/evaluation/day3).
+        Target directory for artifacts (default: artifacts/evaluation/day3/group_aware).
     n_splits : int, default=5
         Number of folds for group K-fold.
     test_fold : int, default=0
@@ -429,7 +464,7 @@ def run_group_aware_evaluation(
     random_state : int, default=42
         Random seed for reproducibility.
     save_artifacts : bool, default=True
-        Whether to save reports to disk.
+        Whether to save reports and model artifacts to disk.
 
     Returns
     -------
@@ -442,6 +477,8 @@ def run_group_aware_evaluation(
 
     df = pd.read_csv(cleaned_path, keep_default_na=False)
 
+    out_dir = Path(output_dir) if (save_artifacts and output_dir) else None
+
     # 1. Create group-aware split
     train_df, test_df, split_metadata = create_group_split(
         df,
@@ -452,13 +489,14 @@ def run_group_aware_evaluation(
         target_column="fraudulent",
     )
 
-    # 2. Evaluate candidate on group-held-out partition
+    # 2. Evaluate candidate on group-held-out partition (saving candidate artifacts in out_dir)
     eval_results = evaluate_group_candidate(
         train_df,
         test_df,
         text_column="description",
         target_column="fraudulent",
         random_state=random_state,
+        save_artifacts_dir=out_dir,
     )
 
     # 3. Analyze remaining near-duplicate risk
@@ -605,3 +643,15 @@ def _generate_group_markdown_summary(report: dict[str, Any]) -> str:
     ])
 
     return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    report = run_group_aware_evaluation(
+        cleaned_data_path="data/processed/cleaned_jobs.csv",
+        output_dir="artifacts/evaluation/day3/group_aware",
+        save_artifacts=True,
+    )
+    print("Duplicate-aware group evaluation completed successfully.")
+    print(f"Train samples: {report['split_metadata']['train_partition']['records']}")
+    print(f"Test samples: {report['split_metadata']['test_partition']['records']}")
+    print(f"Metrics: {report['evaluation']['metrics']}")
