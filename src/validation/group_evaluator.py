@@ -325,8 +325,12 @@ def evaluate_group_candidate(
     prec_fraud = float(precision_score(y_test, y_pred, pos_label=1, zero_division=0))
     rec_fraud = float(recall_score(y_test, y_pred, pos_label=1, zero_division=0))
     f1_fraud = float(f1_score(y_test, y_pred, pos_label=1, zero_division=0))
-    roc_auc = float(roc_auc_score(y_test, y_prob))
-    pr_auc = float(average_precision_score(y_test, y_prob))
+    if len(np.unique(y_test)) >= 2:
+        roc_auc = float(roc_auc_score(y_test, y_prob))
+        pr_auc = float(average_precision_score(y_test, y_prob))
+    else:
+        roc_auc = 0.0
+        pr_auc = 0.0
 
     cm = confusion_matrix(y_test, y_pred)
     tn, fp, fn, tp = [int(v) for v in cm.ravel()]
