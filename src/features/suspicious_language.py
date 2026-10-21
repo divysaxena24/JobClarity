@@ -91,8 +91,11 @@ class SuspiciousLanguageExtractor(BaseEstimator, TransformerMixin):
         "logistics_scam_score",
         "contact_evasion_score",
         "has_email",
+        "email_count",
         "has_phone",
+        "phone_count",
         "has_url",
+        "url_count",
         "currency_symbol_count",
         "uppercase_ratio",
         "exclamation_count",
@@ -117,13 +120,12 @@ class SuspiciousLanguageExtractor(BaseEstimator, TransformerMixin):
         return np.array(self.FEATURE_NAMES, dtype=object)
 
     def _extract_from_single_text(self, raw_text: str) -> list[float]:
-        """Extract the 18 numeric features from a single raw text string."""
+        """Extract the numeric features from a single raw text string."""
         if not raw_text or not isinstance(raw_text, str):
             return [0.0] * len(self.FEATURE_NAMES)
 
         text_len = len(raw_text)
-        cleaned = clean_text(raw_text)
-        words = cleaned.split()
+        words = raw_text.split()
         word_count = len(words)
 
         # Lexical pattern scores
@@ -134,9 +136,12 @@ class SuspiciousLanguageExtractor(BaseEstimator, TransformerMixin):
         contact = len(RE_CONTACT_EVASION.findall(raw_text))
 
         # Surface markers (before HTML stripping / normalisation)
-        has_email = 1.0 if RE_EMAIL.search(raw_text) else 0.0
-        has_phone = 1.0 if RE_PHONE.search(raw_text) else 0.0
-        has_url = 1.0 if RE_URL.search(raw_text) else 0.0
+        email_matches = len(RE_EMAIL.findall(raw_text))
+        has_email = 1.0 if email_matches > 0 else 0.0
+        phone_matches = len(RE_PHONE.findall(raw_text))
+        has_phone = 1.0 if phone_matches > 0 else 0.0
+        url_matches = len(RE_URL.findall(raw_text))
+        has_url = 1.0 if url_matches > 0 else 0.0
         currency_count = float(len(RE_CURRENCY.findall(raw_text)))
 
         # Character distributions
@@ -163,8 +168,11 @@ class SuspiciousLanguageExtractor(BaseEstimator, TransformerMixin):
             float(logistics),
             float(contact),
             has_email,
+            float(email_matches),
             has_phone,
+            float(phone_matches),
             has_url,
+            float(url_matches),
             currency_count,
             round(upper_ratio, 4),
             exclamations,

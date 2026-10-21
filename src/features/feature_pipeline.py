@@ -44,7 +44,7 @@ def create_word_tfidf_vectorizer(
     max_features: int = 10000,
     ngram_range: tuple[int, int] = (1, 2),
     sublinear_tf: bool = True,
-    min_df: int = 2,
+    min_df: int = 1,
 ) -> TfidfVectorizer:
     """Create a word-level TF-IDF vectorizer."""
     return TfidfVectorizer(
@@ -60,7 +60,7 @@ def create_char_tfidf_vectorizer(
     max_features: int = 5000,
     ngram_range: tuple[int, int] = (3, 5),
     sublinear_tf: bool = True,
-    min_df: int = 3,
+    min_df: int = 1,
 ) -> TfidfVectorizer:
     """Create a character n-gram (char_wb) TF-IDF vectorizer."""
     return TfidfVectorizer(
@@ -77,6 +77,8 @@ def create_hybrid_tfidf_union(
     char_max_features: int = 4000,
     word_ngram_range: tuple[int, int] = (1, 2),
     char_ngram_range: tuple[int, int] = (3, 5),
+    word_min_df: int = 1,
+    char_min_df: int = 1,
 ) -> FeatureUnion:
     """
     Create a FeatureUnion combining word n-grams and character n-grams.
@@ -89,6 +91,7 @@ def create_hybrid_tfidf_union(
                     max_features=word_max_features,
                     ngram_range=word_ngram_range,
                     sublinear_tf=True,
+                    min_df=word_min_df,
                 ),
             ),
             (
@@ -97,6 +100,7 @@ def create_hybrid_tfidf_union(
                     max_features=char_max_features,
                     ngram_range=char_ngram_range,
                     sublinear_tf=True,
+                    min_df=char_min_df,
                 ),
             ),
         ]
@@ -250,5 +254,30 @@ class CompositeFeaturePipeline:
         return hstack(blocks, format="csr")
 
     def fit_transform(self, df_or_texts: Any, y: Any = None) -> Any:
-        """Fit and transform in one call."""
-        return self.fit(df_or_texts, y).transform(df_or_texts)
+        """Fit and transform in one call efficiently without duplicate text cleaning."""
+        if isinstance(df_or_texts, pd.DataFrame):
+            col = "description" if "description" in df_or_texts.columns else ("job_description" if "job_description" in df_or_texts.columns else df_or_texts.columns[0])
+            raw_texts = df_or_texts[col].fillna("").astype(str).tolist()
+        elif isinstance(df_or_texts, pd.Series):
+            raw_texts = df_or_texts.fillna("").astype(str).tolist()
+        elif isinstance(df_or_texts, (list, tuple)):
+            raw_texts = [str(t) for t in df_or_texts]
+        else:
+            raw_texts = [str(df_or_texts)]
+
+        cleaned_texts = [clean_text(t) for t in raw_texts]
+        X_tfidf = self.tfidf_model.fit_transform(cleaned_texts)
+
+        blocks = [X_tfidf]
+
+        if self.suspicious_extractor is not None:
+            self.suspicious_extractor.fit(raw_texts)
+            X_suspicious = csr_matrix(self.suspicious_extractor.transform(raw_texts))
+            blocks.append(X_suspicious)
+
+        if self.metadata_extractor is not None:
+            self.metadata_extractor.fit(df_or_texts)
+            X_meta = csr_matrix(self.metadata_extractor.transform(df_or_texts))
+            blocks.append(X_meta)
+
+        return hstack(blocks, format="csr")
