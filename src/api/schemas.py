@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict
+from typing import Any, Dict, List, Optional
 
 
 class PredictionRequest(BaseModel):
@@ -20,3 +20,15 @@ class PredictionResponse(BaseModel):
     top_reasons: List[Dict]
 
     model_version: str
+
+
+class StagingPredictionResponse(BaseModel):
+    """Non-breaking staging response schema for multi-tier decision classification."""
+
+    job_description_snippet: str
+    fraud_probability: float
+    risk_tier: str
+    action: str
+    calibrated_thresholds: Dict[str, float]
+    explanation_summary: Optional[Dict[str, Any]] = None
+    staging_version: str
