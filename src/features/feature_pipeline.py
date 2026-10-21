@@ -281,3 +281,22 @@ class CompositeFeaturePipeline:
             blocks.append(X_meta)
 
         return hstack(blocks, format="csr")
+
+    def get_feature_names_out(self, input_features: Any = None) -> np.ndarray:
+        """Return combined feature names across TF-IDF, suspicious indicators, and metadata."""
+        names: list[str] = []
+        if self.tfidf_model is not None:
+            if hasattr(self.tfidf_model, "get_feature_names_out"):
+                names.extend([str(f) for f in self.tfidf_model.get_feature_names_out()])
+            elif hasattr(self.tfidf_model, "vocabulary_"):
+                sorted_vocab = sorted(self.tfidf_model.vocabulary_.items(), key=lambda x: x[1])
+                names.extend([k for k, _ in sorted_vocab])
+
+        if self.suspicious_extractor is not None:
+            names.extend(list(self.suspicious_extractor.FEATURE_NAMES))
+
+        if self.metadata_extractor is not None:
+            names.extend(list(self.metadata_extractor.FEATURE_NAMES))
+
+        return np.array(names, dtype=object)
+
