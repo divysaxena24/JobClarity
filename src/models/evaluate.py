@@ -153,6 +153,9 @@ def run_evaluation(
     output_cm_path: Path = PROJECT_ROOT / "artifacts" / "baseline_confusion_matrix.png",
     test_size: float = 0.20,
     random_state: int = 42,
+    enable_mlflow: bool = False,
+    experiment_name: str = "JobClarity",
+    tracking_uri: str | None = None,
 ) -> dict:
     """Run full evaluation suite for both baseline and production models."""
     print("=" * 70)
@@ -263,6 +266,23 @@ def run_evaluation(
             output_path=base_cm_path,
         )
         print(f"      Base plot saved: {_format_path(base_cm_path)}")
+
+    if enable_mlflow and (tuned_res is not None or base_res is not None):
+        try:
+            from src.models.experiment_tracker import log_baseline_experiment
+            primary_res = tuned_res or base_res
+            log_baseline_experiment(
+                model=tuned_model if tuned_res is not None else base_model,
+                vectorizer_or_pipeline=vectorizer,
+                train_df=df.iloc[:len(y_train)],
+                test_df=df.iloc[len(y_train):],
+                eval_results={"eval_default_50": primary_res["metrics"], "pr_auc": primary_res["metrics"].get("average_precision_pr_auc", 0.0), "roc_auc": primary_res["metrics"].get("roc_auc", 0.0)},
+                experiment_name=experiment_name,
+                tracking_uri=tracking_uri,
+                run_name="Baseline_Evaluation_Pipeline",
+            )
+        except Exception as mlflow_exc:
+            print(f"[MLflow Warning] Could not log to MLflow: {mlflow_exc}")
 
     print("=" * 70)
     print("Baseline Evaluation Completed Successfully")
@@ -659,6 +679,11 @@ def main():
         help="Run Day 2 Session 4 candidate evaluation on held-out test split.",
     )
     parser.add_argument(
+        "--enable-mlflow",
+        action="store_true",
+        help="Log evaluation run to MLflow",
+    )
+    parser.add_argument(
         "--data-path",
         type=Path,
         default=PROJECT_ROOT / "data" / "processed" / "cleaned_jobs.csv",
@@ -694,6 +719,7 @@ def main():
             data_path=args.data_path,
             output_report_path=args.output_json,
             output_cm_path=args.output_cm_plot,
+            enable_mlflow=getattr(args, "enable_mlflow", False),
         )
 
 

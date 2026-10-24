@@ -103,6 +103,9 @@ def train_leakage_free_baseline(
     ngram_range: tuple = (1, 2),
     save_artifacts: bool = True,
     text_column: str = "description",
+    enable_mlflow: bool = False,
+    experiment_name: str = "JobClarity",
+    tracking_uri: str | None = None,
 ) -> dict:
     """
     Execute a minimal, reproducible, leakage-free training/evaluation pipeline.
@@ -317,6 +320,26 @@ def train_leakage_free_baseline(
     print("Baseline Training Pipeline Completed Successfully")
     print("=" * 70)
 
+    if enable_mlflow:
+        try:
+            from src.models.experiment_tracker import log_baseline_experiment
+            log_baseline_experiment(
+                model=model,
+                vectorizer_or_pipeline=vectorizer,
+                train_df=train_df,
+                test_df=test_df,
+                eval_results={
+                    "eval_default_50": eval_results["metrics"],
+                    "pr_auc": eval_results["metrics"].get("average_precision_pr_auc", 0.0),
+                    "roc_auc": eval_results["metrics"].get("roc_auc", 0.0),
+                },
+                experiment_name=experiment_name,
+                tracking_uri=tracking_uri,
+                run_name="Baseline_Training_Pipeline",
+            )
+        except Exception as mlflow_exc:
+            print(f"[MLflow Warning] Could not log to MLflow: {mlflow_exc}")
+
     return {
         "dataset_info": dataset_info,
         "evaluation": eval_results,
@@ -396,6 +419,11 @@ def main():
         help="Maximum TF-IDF vocabulary features",
     )
     parser.add_argument(
+        "--enable-mlflow",
+        action="store_true",
+        help="Log baseline training run to MLflow",
+    )
+    parser.add_argument(
         "--text-column",
         type=str,
         default="description",
@@ -436,9 +464,10 @@ def main():
             random_state=args.random_state,
             max_features=args.max_features,
             text_column=args.text_column,
+            enable_mlflow=getattr(args, "enable_mlflow", False),
         )
 
 
 if __name__ == "__main__":
     main()
-
+
