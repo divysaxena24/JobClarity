@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 import threading
 from typing import Any, Mapping
@@ -31,8 +32,13 @@ _LOG_LOCK = threading.Lock()
 
 def get_prediction_log_path() -> Path:
     """Return default prediction log file path, ensuring parent directory exists."""
-    DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    return DEFAULT_LOG_FILE
+    custom_path = os.getenv("PREDICTION_LOG_PATH")
+    target = Path(custom_path) if custom_path else DEFAULT_LOG_FILE
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        logger.warning("Failed creating parent directory for %s: %s", target, str(exc))
+    return target
 
 
 def hash_text(text: str) -> str:

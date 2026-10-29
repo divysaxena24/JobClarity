@@ -1,5 +1,6 @@
-# Git
+# Git & CI
 .git
+.github
 .gitignore
 .gitattributes
 
@@ -22,12 +23,26 @@ env/
 .pytest_cache/
 .mypy_cache/
 
-# Logs
+# Logs & Ephemeral Data
 *.log
+logs/*.log
+logs/*.jsonl
 
-# Environment
+# Test & Coverage Reports
+htmlcov/
+.coverage
+coverage.xml
+
+# MLOps Runs & Local Databases
+mlruns/
+mlflow.db
+
+# Environment & Secrets
 .env
+.env.*
 .env.local
+*.pem
+*.key
 
 # OS
 .DS_Store
