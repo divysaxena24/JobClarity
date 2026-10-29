@@ -1,0 +1,177 @@
+{
+  "project": "JobClarity",
+  "phase": "Day 8 — CI/CD & Deployment Readiness",
+  "generated_at_utc": "2026-10-29T19:25:00Z",
+  "backend_ci": {
+    "repository": "JobClarity (https://github.com/divysaxena24/JobClarity.git)",
+    "branch": "main",
+    "workflow_file": ".github/workflows/ci.yml",
+    "python_version": "3.12",
+    "package_manager": "pip",
+    "dependency_manifest": "requirements.txt",
+    "bytecode_compilation": {
+      "command": "python -m compileall src tests",
+      "status": "PASSED (exit code 0)"
+    },
+    "linting_and_static_analysis": {
+      "tool": "flake8",
+      "command": "python -m flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics",
+      "critical_errors": 0,
+      "status": "PASSED (exit code 0)"
+    },
+    "application_import_verification": {
+      "verified_modules": [
+        "fastapi",
+        "pandas",
+        "sklearn",
+        "xgboost",
+        "shap",
+        "httpx",
+        "src.api.main.app",
+        "src.services.prediction_logger.log_prediction",
+        "src.services.jd_generator.generate_job_description"
+      ],
+      "status": "PASSED (exit code 0)"
+    },
+    "mocked_ai_test_isolation": {
+      "OPENAI_API_KEY": "",
+      "GEMINI_API_KEY": "",
+      "GOOGLE_API_KEY": "",
+      "offline_template_fallback_verified": true,
+      "zero_network_dependency_for_tests": true
+    }
+  },
+  "frontend_ci": {
+    "repository": "jobclarity-frontend (https://github.com/divysaxena24/JobClarity-frontend.git)",
+    "is_separate_repository": true,
+    "location": "../jobclarity-frontend",
+    "workflow_file": "jobclarity-frontend/.github/workflows/ci.yml",
+    "node_version": "20",
+    "package_manager": "npm",
+    "lockfile": "package-lock.json",
+    "typescript_check": {
+      "command": "npx tsc --noEmit --incremental false",
+      "errors": 0,
+      "status": "PASSED (exit code 0)"
+    },
+    "eslint_check": {
+      "command": "npm run lint",
+      "errors": 0,
+      "warnings": 0,
+      "status": "PASSED (exit code 0)"
+    },
+    "production_build": {
+      "command": "npm run build",
+      "builder": "Next.js 16.2.12 (Turbopack)",
+      "static_pages_generated": "4/4",
+      "status": "PASSED (exit code 0)"
+    },
+    "api_base_url_configuration": {
+      "environment_variable": "NEXT_PUBLIC_API_BASE_URL",
+      "default_fallback": "http://127.0.0.1:8000",
+      "timeout_ms": 60000,
+      "cold_start_handling": "ECONNABORTED friendly retry messaging"
+    }
+  },
+  "docker_and_deployment": {
+    "dockerfile_path": "Dockerfile",
+    "base_image": "python:3.12-slim",
+    "port_binding": {
+      "default_port": 8000,
+      "startup_command": "CMD [\"sh\", \"-c\", \"uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT:-8000}\"]",
+      "platform_port_support": "Dynamic binding via $PORT environment variable (e.g. Render, Cloud Run, Heroku)"
+    },
+    "healthcheck": {
+      "command": "python -c \"import os, urllib.request; port = os.getenv('PORT', '8000'); urllib.request.urlopen(f'http://localhost:{port}/health')\"",
+      "interval": "30s",
+      "timeout": "10s",
+      "start_period": "20s",
+      "retries": 3
+    },
+    "storage_and_logs": {
+      "precreated_log_dir": "/app/logs",
+      "configurable_log_path_env": "PREDICTION_LOG_PATH",
+      "default_log_path": "logs/predictions.jsonl",
+      "render_ephemeral_storage_risk": "Render Web Services use ephemeral filesystems. Prediction JSONL logs stored locally will disappear upon instance restarts, redeployments, or free-tier sleep cycles.",
+      "mitigation_strategies": [
+        "Attach a Render Persistent Disk mounted at /app/logs",
+        "Stream logs to an external log aggregation service (Datadog, Better Stack, Logtail)",
+        "Ship prediction events to cloud object storage (S3/GCS) or remote PostgreSQL"
+      ]
+    },
+    "security_and_secrets": {
+      "baked_secrets_in_dockerfile": false,
+      "dockerignore_path": ".dockerignore",
+      "excluded_patterns": [
+        ".git",
+        ".github",
+        "logs/*.log",
+        "logs/*.jsonl",
+        "htmlcov/",
+        ".coverage",
+        "coverage.xml",
+        "mlruns/",
+        "mlflow.db",
+        ".env",
+        ".env.*",
+        ".env.local",
+        "*.pem",
+        "*.key"
+      ],
+      "preserved_inference_artifacts": [
+        "models/xgboost_model_tuned.pkl",
+        "models/tfidf_vectorizer.pkl",
+        "models/xgboost_model.pkl",
+        "artifacts/evaluation/day4/model_staging/"
+      ]
+    },
+    "cors_configuration": {
+      "default_origins": [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://jobclarity.vercel.app"
+      ],
+      "dynamic_origins_env": "ALLOWED_ORIGINS (comma-separated list)"
+    }
+  },
+  "test_verification": {
+    "full_test_suite_total": 357,
+    "full_test_suite_passed": 357,
+    "full_test_suite_failed": 0,
+    "pass_rate": "100%",
+    "execution_duration_seconds": 226.05,
+    "test_breakdown": {
+      "test_api.py": 17,
+      "test_candidate_explainability.py": 14,
+      "test_dataset_audit.py": 11,
+      "test_deployment_readiness.py": 17,
+      "test_explainability.py": 9,
+      "test_feature_builder.py": 30,
+      "test_feature_engineering.py": 19,
+      "test_group_aware_threshold_optimization.py": 24,
+      "test_group_evaluator.py": 18,
+      "test_jd_generator.py": 17,
+      "test_mlflow_tracking.py": 28,
+      "test_ml_pipeline.py": 43,
+      "test_model_loader.py": 13,
+      "test_near_duplicate_grouper.py": 25,
+      "test_prediction_logging.py": 9,
+      "test_predictor.py": 14,
+      "test_preprocessing.py": 17,
+      "test_regression.py": 22,
+      "test_staging_validation.py": 41
+    },
+    "core_regression_and_readiness_total": 109,
+    "core_regression_and_readiness_passed": 109,
+    "production_models_unmodified": true,
+    "decision_thresholds_unmodified": true
+  },
+  "remaining_manual_steps": [
+    "Commit and push JobClarity backend repository changes to GitHub main branch.",
+    "Commit and push jobclarity-frontend repository changes to GitHub main branch.",
+    "In Render Dashboard: create a Web Service linked to the JobClarity repo (Docker runtime, environment variable ALLOWED_ORIGINS=https://jobclarity.vercel.app).",
+    "In Vercel Dashboard: create/link the JobClarity frontend project with environment variable NEXT_PUBLIC_API_BASE_URL=https://<your-render-service>.onrender.com.",
+    "Optional (Persistent Logs): Add a Render Persistent Disk mounted at /app/logs if long-term on-disk JSONL log retention is required.",
+    "Optional (Live LLMs): Configure OPENAI_API_KEY or GEMINI_API_KEY in Render environment settings if generative AI synthesis is desired instead of default synthetic template fallback."
+  ]
+}
