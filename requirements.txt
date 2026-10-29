@@ -31,8 +31,9 @@ pytest
 pytest-cov
 httpx
 
-# Code Formatting
+# Code Formatting & Linting
 black
+flake8
 
 # Development
 jupyter

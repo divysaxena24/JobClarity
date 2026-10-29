@@ -4,14 +4,13 @@ on:
   push:
     branches:
       - main
-
   pull_request:
     branches:
       - main
 
 jobs:
   test-and-build:
-    name: Test and Build
+    name: Backend Test and Build
     runs-on: ubuntu-latest
 
     steps:
@@ -32,15 +31,30 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Verify Imports
+      - name: Validate Python Bytecode Compilation
         run: |
-          python -c "import fastapi"
-          python -c "import pandas"
-          python -c "import sklearn"
-          python -c "import xgboost"
-          python -c "import shap"
+          python -m compileall src tests
+
+      - name: Lint with Flake8
+        run: |
+          # Enforce zero syntax errors or undefined symbols
+          python -m flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Informational complexity and style check
+          python -m flake8 src tests --count --exit-zero --max-complexity=15 --max-line-length=127 --statistics
+
+      - name: Verify Application Imports
+        run: |
+          python -c "import fastapi, pandas, sklearn, xgboost, shap, httpx"
+          python -c "from src.api.main import app"
+          python -c "from src.services.prediction_logger import log_prediction"
+          python -c "from src.services.jd_generator import generate_job_description"
 
       - name: Run Pytest Suite with Coverage
+        env:
+          PYTHONPATH: .
+          OPENAI_API_KEY: ""
+          GEMINI_API_KEY: ""
+          GOOGLE_API_KEY: ""
         run: |
           python -m pytest -v --cov=src --cov-report=term-missing --cov-report=xml --cov-report=html
 
@@ -54,4 +68,4 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build -t jobclarity-ci .
+          docker build -t jobclarity-ci .
