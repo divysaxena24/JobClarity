@@ -35,7 +35,10 @@ def predict_job(job_description: str):
 
     # Fraud Risk Score
     fraud_risk_score = int(round(probability * 100))
-    top_reasons = explain_prediction(job_description)
+    try:
+        top_reasons = explain_prediction(job_description)
+    except Exception:
+        top_reasons = []
 
     # Risk Level
     if fraud_risk_score <= 25:
