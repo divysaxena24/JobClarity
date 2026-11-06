@@ -34,7 +34,16 @@ logs/
 *.log
 
 # Artifacts (generated plots/reports)
-artifacts/
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/evaluation/
+artifacts/evaluation/*
+!artifacts/evaluation/day4/
+artifacts/evaluation/day4/*
+!artifacts/evaluation/day4/model_staging/
+!artifacts/evaluation/day4/model_staging/**
+!artifacts/evaluation/day8/
+!artifacts/evaluation/day8/**
 
 # IDE
 .vscode/

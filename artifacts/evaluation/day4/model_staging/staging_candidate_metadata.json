@@ -1,0 +1,12 @@
+{
+  "model_version": "staging-candidate-d-1.0.0",
+  "description": "Candidate D: Word TF-IDF (10000) + 21 Suspicious Language Features + XGBoost",
+  "train_samples": 14304,
+  "held_out_test_samples": 3576,
+  "feature_count": 10021,
+  "created_at": "2026-10-21T05:25:33Z",
+  "calibrated_thresholds": {
+    "review_threshold": 0.14,
+    "high_risk_threshold": 0.33
+  }
+}

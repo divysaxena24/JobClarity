@@ -100,6 +100,16 @@ class TestDockerAndDeploymentReadiness:
         assert "models" not in rules
         assert "artifacts/evaluation/day4/model_staging" not in rules
 
+    def test_gitignore_preserves_staging_inference_artifacts(self):
+        gitignore_path = PROJECT_ROOT / ".gitignore"
+        assert gitignore_path.exists(), ".gitignore must exist at repository root."
+
+        content = gitignore_path.read_text(encoding="utf-8")
+        assert "!artifacts/evaluation/day4/model_staging/" in content, (
+            "Must explicitly unignore artifacts/evaluation/day4/model_staging/ in .gitignore "
+            "so candidate model and pipeline artifacts are tracked for CI and deployment."
+        )
+
 
 # ---------------------------------------------------------------------------
 # 2. Health Endpoints & CORS Configuration
@@ -249,3 +259,19 @@ class TestEndpointRegressionAndValidationSafety:
         res = client.post("/predict/staging", json={"job_description": "Too brief"})
         assert res.status_code == 422
         assert "Traceback" not in res.text
+
+    def test_predict_staging_preserves_legitimate_503_when_unloaded(self, client: TestClient, monkeypatch):
+        """Preserve HTTP 503 contract when the staging model is legitimately unavailable."""
+        from src.models.staging_predictor import StagingPredictor
+        unloaded_predictor = StagingPredictor(model=None, pipeline=None)
+        monkeypatch.setattr("src.api.routes.get_staging_predictor", lambda: unloaded_predictor)
+
+        valid_payload = {
+            "job_description": (
+                "Experienced Machine Learning Engineer wanted for full-time role building NLP pipelines "
+                "using Python, PyTorch, Scikit-Learn, and FastAPI in a cloud environment."
+            )
+        }
+        res = client.post("/predict/staging", json=valid_payload)
+        assert res.status_code == 503
+        assert "Staging model service is currently unavailable" in res.json()["detail"]
