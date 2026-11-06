@@ -5,14 +5,11 @@ from fastapi import APIRouter, HTTPException
 from src.api import predictor
 from src.api.predictor import predict_job
 from src.api.schemas import (
-    JDGenerationRequest,
-    JDGenerationResponse,
     PredictionRequest,
     PredictionResponse,
     StagingPredictionResponse,
 )
 from src.models.staging_predictor import get_staging_predictor
-from src.services.jd_generator import generate_job_description
 from src.services.prediction_logger import log_prediction
 
 logger = logging.getLogger(__name__)
@@ -32,7 +29,6 @@ def home():
         "description": "AI-powered Fake Job Detection API",
         "docs": "/docs",
         "health": "/health",
-        "generate_jd": "/generate-jd",
     }
 
 
@@ -140,31 +136,3 @@ def predict_staging(request: PredictionRequest):
         logger.warning("Staging prediction logging failed safely: %s", str(log_exc))
 
     return result
-
-
-@router.post(
-    "/generate-jd",
-    response_model=JDGenerationResponse
-)
-def generate_jd_endpoint(request: JDGenerationRequest):
-    """
-    Generate an editable synthetic job description from structured parameters.
-    Clearly marks content as AI-generated and notes risk estimation disclaimers.
-    """
-    try:
-        result = generate_job_description(
-            job_role=request.job_role,
-            skills=request.skills,
-            experience_level=request.experience_level,
-            location=request.location,
-            company_name=request.company_name,
-            salary_range=request.salary_range,
-        )
-        return result
-    except ValueError as val_err:
-        raise HTTPException(status_code=422, detail=str(val_err))
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while generating the job description: {str(exc)}",
-        )

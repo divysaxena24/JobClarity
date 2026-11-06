@@ -20,11 +20,9 @@ import pytest
 from fastapi.testclient import TestClient
 from src.api.main import DEFAULT_ALLOWED_ORIGINS, app
 from src.api.schemas import (
-    JDGenerationResponse,
     PredictionResponse,
     StagingPredictionResponse,
 )
-from src.services.jd_generator import DISCLAIMER_TEXT, generate_job_description
 from src.services.prediction_logger import (
     get_prediction_log_path,
     log_prediction,
@@ -125,7 +123,6 @@ class TestHealthAndCORSConfiguration:
         data = response.json()
         assert data["project"] == "JobClarity"
         assert data["health"] == "/health"
-        assert data["generate_jd"] == "/generate-jd"
 
     def test_cors_default_origins(self):
         assert "http://localhost:3000" in DEFAULT_ALLOWED_ORIGINS
@@ -252,50 +249,3 @@ class TestEndpointRegressionAndValidationSafety:
         res = client.post("/predict/staging", json={"job_description": "Too brief"})
         assert res.status_code == 422
         assert "Traceback" not in res.text
-
-    def test_generate_jd_valid_schema_and_disclaimer(self, client: TestClient):
-        payload = {
-            "job_role": "Cloud Security Architect",
-            "skills": "AWS IAM, Kubernetes Security, Python, SIEM",
-            "experience_level": "6+ years",
-            "location": "Remote",
-            "company_name": "Apex Cloud Systems",
-            "salary_range": "$160k - $190k",
-        }
-        res = client.post("/generate-jd", json=payload)
-        assert res.status_code == 200
-        validated = JDGenerationResponse(**res.json())
-        assert validated.is_ai_generated is True
-        assert DISCLAIMER_TEXT == validated.disclaimer
-        assert "Apex Cloud Systems" in validated.generated_job_description
-        assert "Cloud Security Architect" in validated.generated_job_description
-
-    def test_generate_jd_missing_required_fields_safe_error(self, client: TestClient):
-        # Missing skills
-        res = client.post(
-            "/generate-jd",
-            json={
-                "job_role": "Backend Engineer",
-                "experience_level": "Senior",
-                "location": "Remote",
-            },
-        )
-        assert res.status_code == 422
-        assert "Traceback" not in res.text
-
-    def test_offline_ai_fallback_guarantee(self, monkeypatch):
-        """Ensure that with no API keys configured, generation succeeds deterministically offline."""
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-
-        result = generate_job_description(
-            job_role="Full Stack Engineer",
-            skills="TypeScript, React, Python",
-            experience_level="Mid-Level",
-            location="Remote",
-        )
-        assert result["is_ai_generated"] is True
-        assert result["provider"] == "synthetic_template"
-        assert DISCLAIMER_TEXT in result["disclaimer"]
-        assert len(result["generated_job_description"]) > 200
