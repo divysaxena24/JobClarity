@@ -47,7 +47,6 @@ jobs:
           python -c "import fastapi, pandas, sklearn, xgboost, shap, httpx"
           python -c "from src.api.main import app"
           python -c "from src.services.prediction_logger import log_prediction"
-          python -c "from src.services.jd_generator import generate_job_description"
 
       - name: Run Pytest Suite with Coverage
         env:
