@@ -99,3 +99,126 @@ class TestExplainability:
         # Restore
         monkeypatch.undo()
         importlib.reload(s)
+
+
+@pytest.mark.unit
+class TestNativeXGBoostExplainability:
+    """Tests verifying native XGBoost TreeSHAP integration and mathematical validity."""
+
+    def test_legitimate_jd_returns_non_empty_explanations(self, sample_legitimate_text):
+        """A realistic legitimate job description returns populated top_reasons."""
+        from src.explainability.shap_explainer import explain_prediction, init_explainer
+
+        init_explainer()
+        reasons = explain_prediction(sample_legitimate_text, top_k=10)
+        assert isinstance(reasons, list)
+        assert len(reasons) > 0
+        assert len(reasons) <= 10
+        assert all("feature" in r and "impact" in r and "effect" in r for r in reasons)
+
+    def test_suspicious_jd_returns_non_empty_explanations(self, sample_fraudulent_text):
+        """A realistic suspicious job description returns populated high-risk reasons."""
+        from src.explainability.shap_explainer import explain_prediction, init_explainer
+
+        init_explainer()
+        reasons = explain_prediction(sample_fraudulent_text, top_k=10)
+        assert isinstance(reasons, list)
+        assert len(reasons) > 0
+        # Suspicious posting should contain fraud-increasing signals
+        assert any(r["effect"] == "Increases fraud risk" for r in reasons)
+
+    def test_positive_and_negative_shap_impact_effect_labels(self, sample_fraudulent_text):
+        """Positive SHAP impacts must map to 'Increases fraud risk' and negative to 'Decreases fraud risk'."""
+        from src.explainability.shap_explainer import explain_prediction
+
+        reasons = explain_prediction(sample_fraudulent_text, top_k=10)
+        for r in reasons:
+            if r["impact"] > 0:
+                assert r["effect"] == "Increases fraud risk"
+            elif r["impact"] < 0:
+                assert r["effect"] == "Decreases fraud risk"
+
+    def test_features_map_to_correct_vectorizer_vocabulary_indices(self, sample_legitimate_text):
+        """All returned feature names must belong to the fitted vectorizer vocabulary."""
+        from src.explainability.shap_explainer import explain_prediction, vectorizer
+
+        reasons = explain_prediction(sample_legitimate_text, top_k=10)
+        vocab_features = set(vectorizer.get_feature_names_out())
+        assert len(vocab_features) == 10000
+
+        for r in reasons:
+            assert r["feature"] in vocab_features
+
+    def test_contributions_reconstruct_model_margin_and_probability(self, sample_fraudulent_text):
+        """Mathematical check: sum of TreeSHAP contributions must reconstruct the raw model margin."""
+        import scipy.special
+        import xgboost as xgb
+        from src.explainability.shap_explainer import booster, model, vectorizer
+        from src.preprocessing.text_cleaner import clean_text
+
+        cleaned = clean_text(sample_fraudulent_text)
+        X = vectorizer.transform([cleaned])
+        raw_booster = getattr(model, "get_booster", lambda: booster)()
+        dmat = xgb.DMatrix(X)
+
+        # 1. Native TreeSHAP contribs (features + bias)
+        contribs = raw_booster.predict(dmat, pred_contribs=True)[0]
+        sum_contribs = float(contribs.sum())
+
+        # 2. Raw margin from booster
+        raw_margin = float(raw_booster.predict(dmat, output_margin=True)[0])
+
+        # Sum of SHAP must equal raw logit margin within tight tolerance
+        assert np.isclose(sum_contribs, raw_margin, atol=1e-4)
+
+        # 3. Logistic transform of reconstructed margin must match predict_proba
+        predicted_prob = float(model.predict_proba(X)[0][1])
+        reconstructed_prob = float(scipy.special.expit(sum_contribs))
+        assert np.isclose(reconstructed_prob, predicted_prob, atol=1e-4)
+
+    def test_empty_or_invalid_input_returns_empty_list(self):
+        """Empty, whitespace-only, or non-string input safely yields an empty list."""
+        from src.explainability.shap_explainer import explain_prediction
+
+        assert explain_prediction("") == []
+        assert explain_prediction("   \n\t  ") == []
+        assert explain_prediction(None) == []  # type: ignore[arg-type]
+        assert explain_prediction(12345) == []  # type: ignore[arg-type]
+
+    def test_explanation_failure_does_not_break_prediction(self, monkeypatch, sample_legitimate_text):
+        """Prediction pipeline must remain 100% operational even if explain_prediction fails."""
+        from src.api.predictor import predict_job
+
+        monkeypatch.setattr(
+            "src.api.predictor.explain_prediction",
+            MagicMock(side_effect=RuntimeError("Simulated explainer crash")),
+        )
+        # Should not raise exception
+        try:
+            result = predict_job(sample_legitimate_text)
+            assert result["prediction"] in ("Real", "Fake")
+            assert "fraud_probability" in result
+        except Exception:
+            pytest.fail("predict_job should never crash when explain_prediction raises an exception.")
+
+    def test_api_predict_endpoint_response_schema_populated(self, client, sample_legitimate_text, sample_fraudulent_text):
+        """End-to-end /predict endpoint returns fully compliant schema with populated top_reasons."""
+        from src.api.schemas import PredictionResponse
+
+        # Legitimate test
+        resp_legit = client.post("/predict", json={"job_description": sample_legitimate_text})
+        assert resp_legit.status_code == 200
+        data_legit = resp_legit.json()
+        validated_legit = PredictionResponse(**data_legit)
+        assert validated_legit.prediction == "Real"
+        assert len(validated_legit.top_reasons) > 0
+        assert all(isinstance(r["impact"], float) for r in validated_legit.top_reasons)
+
+        # Suspicious test
+        resp_fraud = client.post("/predict", json={"job_description": sample_fraudulent_text})
+        assert resp_fraud.status_code == 200
+        data_fraud = resp_fraud.json()
+        validated_fraud = PredictionResponse(**data_fraud)
+        assert validated_fraud.prediction == "Fake"
+        assert len(validated_fraud.top_reasons) > 0
+        assert any(r["effect"] == "Increases fraud risk" for r in validated_fraud.top_reasons)
