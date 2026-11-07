@@ -162,18 +162,49 @@ class TestAPIEndpoints:
         )
         assert response.status_code == 422
 
-    def test_post_predict_oversized_payload_handles_gracefully(
+    def test_post_predict_boundary_max_length_accepted_200(
         self, client, monkeypatch, dummy_legitimate_model, fitted_tiny_vectorizer
     ):
-        """Very large payloads (e.g. 50,000 chars) should process gracefully without crashing."""
+        """Payload at exact max_length boundary (50,000 chars) should process successfully."""
         monkeypatch.setattr(predictor, "model", dummy_legitimate_model)
         monkeypatch.setattr(predictor, "vectorizer", fitted_tiny_vectorizer)
         monkeypatch.setattr("src.api.predictor.explain_prediction", lambda text, top_k=10: [])
 
-        huge_description = "We are seeking a senior software engineer. " * 1200
-        response = client.post("/predict", json={"job_description": huge_description})
+        exact_50k_description = "A" * 50000
+        response = client.post("/predict", json={"job_description": exact_50k_description})
         assert response.status_code == 200
         assert "prediction" in response.json()
+
+    def test_post_predict_exceeds_max_length_rejected_422(self, client):
+        """Payload exceeding max_length (50,001 chars) must be rejected with HTTP 422."""
+        too_long_description = "A" * 50001
+        response = client.post("/predict", json={"job_description": too_long_description})
+        assert response.status_code == 422
+        data = response.json()
+        assert "detail" in data
+
+    def test_post_predict_boundary_min_length_accepted_200(
+        self, client, monkeypatch, dummy_legitimate_model, fitted_tiny_vectorizer
+    ):
+        """Payload at exact min_length boundary (20 chars) should process successfully."""
+        monkeypatch.setattr(predictor, "model", dummy_legitimate_model)
+        monkeypatch.setattr(predictor, "vectorizer", fitted_tiny_vectorizer)
+        monkeypatch.setattr("src.api.predictor.explain_prediction", lambda text, top_k=10: [])
+
+        exact_20_chars = "Software engineer ok"
+        assert len(exact_20_chars) == 20
+        response = client.post("/predict", json={"job_description": exact_20_chars})
+        assert response.status_code == 200
+        assert "prediction" in response.json()
+
+    def test_post_predict_under_min_length_boundary_rejected_422(self, client):
+        """Payload below min_length boundary (19 chars) must be rejected with HTTP 422."""
+        nineteen_chars = "Software engineer x"
+        assert len(nineteen_chars) == 19
+        response = client.post("/predict", json={"job_description": nineteen_chars})
+        assert response.status_code == 422
+        data = response.json()
+        assert "detail" in data
 
     def test_post_predict_unloaded_model_service_unavailable(self, client, monkeypatch, sample_legitimate_text):
         """When the model is not loaded, the endpoint must return 503 without exposing internal trace."""
