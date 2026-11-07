@@ -1,0 +1,50 @@
+# JobClarity Python Dependency Lockfile
+# Generated for reproducible builds (Phase 7.1 Remediation)
+# Python 3.12 compatible
+
+# Core Data Processing
+pandas==2.2.0
+numpy==1.26.4
+scipy==1.15.3
+
+# Machine Learning & Explainability
+scikit-learn==1.5.0
+xgboost==3.3.0
+optuna==4.9.0
+shap==0.46.0
+joblib==1.4.0
+
+# Natural Language Processing
+nltk==3.10.0
+regex==2026.1.15
+
+# API Framework & Runtime
+fastapi==0.128.8
+starlette==0.52.1
+pydantic==2.12.5
+pydantic_core==2.41.5
+uvicorn==0.41.0
+httptools==0.7.1
+uvloop==0.21.0; sys_platform != "win32"
+
+# MLOps & Tracking
+mlflow==3.14.0
+great_expectations==1.19.1
+
+# UI (Local Demo)
+gradio==6.20.0
+
+# Configuration & Utilities
+python-dotenv==1.2.1
+beautifulsoup4==4.14.3
+soupsieve==2.8.3
+
+# Testing & Verification
+pytest==9.0.2
+pytest-cov==7.1.0
+httpx==0.28.1
+httpcore==1.0.9
+
+# Code Quality & Tooling
+black==26.5.1
+flake8==7.3.0
