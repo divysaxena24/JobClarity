@@ -491,6 +491,11 @@ JobClarity/
 
 ## 9. Python Dependencies & Environment Lockfile
 
+JobClarity separates **production runtime/test dependencies** from **development/research dependencies** to ensure clean, conflict-free dependency resolution and minimal container attack surfaces:
+
+- **Production Runtime & Testing**: Defined in [`requirements.txt`](requirements.txt) and pinned in [`requirements.lock`](requirements.lock).
+- **Development & Research**: Defined in [`requirements-dev.txt`](requirements-dev.txt) for offline experiment tracking (`mlflow`), pipeline expectation audits (`great_expectations`), Bayesian optimization (`optuna`), exploratory UI demos (`gradio`), and code quality tooling (`black`, `flake8`, `jupyter`).
+
 The production environment is pinned in [`requirements.lock`](requirements.lock):
 
 | Package | Pinned Version | Role in JobClarity |
@@ -498,7 +503,7 @@ The production environment is pinned in [`requirements.lock`](requirements.lock)
 | `fastapi` | `0.128.8` | REST API framework |
 | `uvicorn` | `0.41.0` | Production ASGI web server |
 | `pydantic` | `2.12.5` | Data validation and schema enforcement |
-| `starlette` | `0.52.1` | Underlying ASGI toolkit |
+| `starlette` | `0.52.1` | Underlying ASGI toolkit (fully compatible with FastAPI 0.128.8) |
 | `xgboost` | `3.3.0` | Gradient-boosted decision trees and native TreeSHAP |
 | `scikit-learn` | `1.5.0` | TF-IDF vectorization and evaluation metrics (see Note below) |
 | `shap` | `0.46.0` | Interpretability and explainable AI |
@@ -506,11 +511,11 @@ The production environment is pinned in [`requirements.lock`](requirements.lock)
 | `numpy` | `1.26.4` | Matrix computations and numerical operations |
 | `scipy` | `1.15.3` | Sparse matrix arithmetic |
 | `nltk` | `3.10.0` | Natural language tokenization utilities |
-| `mlflow` | `3.14.0` | Experiment tracking and model registry governance |
+| `matplotlib` | `3.10.8` | Metric visualization and evaluation curve computations |
 | `pytest` | `9.0.2` | Automated testing framework |
 | `httpx` | `0.28.1` | HTTP client for endpoint integration tests |
 
-> **Note on `scikit-learn` Version Compatibility**: While `requirements.lock` pins `scikit-learn==1.5.0`, the serialized vectorizer artifact (`models/tfidf_vectorizer.pkl`) reports having been serialized under version `1.9.0`. Compatibility across versions remains an unresolved technical finding pending controlled verification (see [Section 16](#16-known-technical-inconsistencies--maintenance-notes)).
+> **Note on `scikit-learn` Version Compatibility**: While `requirements.lock` pins `scikit-learn==1.5.0`, the serialized vectorizer artifact (`models/tfidf_vectorizer.pkl`) reports having been serialized under version `1.9.0`. Compatibility across versions remains an unresolved technical finding pending controlled verification (see [Section 16](#16-known-technical-inconsistencies--maintenance-notes)). Production model artifacts are preserved as frozen binaries without retraining or re-serializing.
 
 ---
 
@@ -598,7 +603,7 @@ The backend container configuration is specified in [`Dockerfile`](Dockerfile) w
 - **Dynamic Port**: Honors `${PORT:-8000}` dynamically via entrypoint `sh -c "uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"`.
 - **Healthcheck**: Uses a native Python probe (`urllib.request.urlopen`) checking `http://localhost:${PORT:-8000}/health` every 30 seconds.
 
-> **Environment Verification Note**: The container instructions below represent the standard operational commands for building and running the service. Local Docker build and runtime execution have not been independently verified in this development workspace due to local Docker daemon unavailability; containerized builds are executed directly by the cloud deployment platform (Render).
+> **Environment Verification Note**: The container image has been built from clean cache (`docker build --no-cache -t jobclarity:prod .`) and verified locally: non-root user execution (`appuser`, UID 1001), `/health` endpoint response (`200 OK`, `model_loaded: true`), and complete backend test execution have been validated inside the resulting image.
 
 ```bash
 # Build the hardened Docker image
