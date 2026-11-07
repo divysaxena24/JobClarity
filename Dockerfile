@@ -11,8 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     gcc \
-    build-essential \
-    libpq-dev && \
+    build-essential && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

@@ -1,8 +1,6 @@
 # Git & CI
 .git
 .github
-.gitignore
-.gitattributes
 
 # Python
 __pycache__/
@@ -47,3 +45,6 @@ mlflow.db
 # OS
 .DS_Store
 Thumbs.db
+
+# Large Datasets
+data/

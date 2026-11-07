@@ -1,41 +1,34 @@
-# Data Processing
+# JobClarity Production Runtime & Testing Dependencies
+# Python 3.12 compatible
+
+# Core Data Processing
 pandas
 numpy
+scipy
 
-# Machine Learning
+# Machine Learning & Explainability
 scikit-learn
 xgboost
-optuna
 shap
+joblib
 
-# NLP
+# Natural Language Processing
 nltk
 
-# API
+# API Framework & Runtime
 fastapi
+starlette
+pydantic
 uvicorn
 
-# MLOps
-mlflow
-great_expectations
-
-# UI
-gradio
-
-# Utilities
-joblib
+# Configuration & Utilities
 python-dotenv
+beautifulsoup4
 
-# Testing
+# Evaluation & Plotting
+matplotlib
+
+# Testing & Verification
 pytest
 pytest-cov
 httpx
-
-# Code Formatting & Linting
-black
-flake8
-
-# Development
-jupyter
-ipykernel
-beautifulsoup4

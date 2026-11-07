@@ -1,0 +1,20 @@
+# JobClarity Development & Research Dependencies
+# Extends production dependencies with offline experimentation, MLOps, and tooling
+
+-r requirements.txt
+
+# Offline MLOps & Experiment Tracking
+mlflow
+great_expectations
+optuna
+
+# Local Interactive Exploration (Research Only)
+gradio
+
+# Code Quality & Tooling
+black
+flake8
+
+# Development & Notebooks
+jupyter
+ipykernel
