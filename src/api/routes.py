@@ -1,9 +1,10 @@
 import logging
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.api import predictor
 from src.api.predictor import predict_job
+from src.api.rate_limiter import rate_limit_dependency
 from src.api.schemas import (
     PredictionRequest,
     PredictionResponse,
@@ -47,7 +48,8 @@ def health():
 
 @router.post(
     "/predict",
-    response_model=PredictionResponse
+    response_model=PredictionResponse,
+    dependencies=[Depends(rate_limit_dependency)],
 )
 def predict(request: PredictionRequest):
     start_time = time.perf_counter()
@@ -88,7 +90,8 @@ def predict(request: PredictionRequest):
 
 @router.post(
     "/predict/staging",
-    response_model=StagingPredictionResponse
+    response_model=StagingPredictionResponse,
+    dependencies=[Depends(rate_limit_dependency)],
 )
 def predict_staging(request: PredictionRequest):
     """

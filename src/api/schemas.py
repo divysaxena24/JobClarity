@@ -6,7 +6,8 @@ class PredictionRequest(BaseModel):
     job_description: str = Field(
         ...,
         min_length=20,
-        description="Complete job description"
+        max_length=50000,
+        description="Complete job description (20 to 50,000 characters)"
     )
 
 
