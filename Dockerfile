@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     PORT=8000
 
+# Install build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     gcc \
@@ -15,14 +16,28 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# Create dedicated non-root application group and user
+RUN groupadd -r -g 1001 appgroup && \
+    useradd -r -u 1001 -g appgroup -d /app -s /sbin/nologin appuser
 
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy dependency specifications (lockfile prioritized for reproducibility)
+COPY requirements.txt requirements.lock* ./
 
+RUN if [ -f requirements.lock ]; then \
+        pip install --no-cache-dir -r requirements.lock; \
+    else \
+        pip install --no-cache-dir -r requirements.txt; \
+    fi
+
+# Copy application source code
 COPY . .
 
-# Ensure writable runtime logs directory
-RUN mkdir -p /app/logs
+# Ensure writable runtime logs directory and assign non-root ownership
+RUN mkdir -p /app/logs && \
+    chown -R appuser:appgroup /app
+
+# Switch to non-root execution
+USER appuser
 
 EXPOSE 8000
 

@@ -64,6 +64,11 @@ class TestDockerAndDeploymentReadiness:
         # Port exposition
         assert "EXPOSE 8000" in content
 
+        # Non-root user execution
+        assert "USER appuser" in content or "USER" in content, (
+            "Dockerfile must enforce non-root user execution."
+        )
+
         # Zero baked secrets
         assert "sk-" not in content
         assert "AIza" not in content
