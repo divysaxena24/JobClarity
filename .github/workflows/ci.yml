@@ -30,6 +30,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
+          pip install flake8
 
       - name: Validate Python Bytecode Compilation
         run: |

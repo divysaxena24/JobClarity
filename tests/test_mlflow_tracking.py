@@ -20,6 +20,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 import pytest
+pytest.importorskip("mlflow", reason="mlflow is an offline research dependency")
 from xgboost import XGBClassifier
 
 from src.features.feature_pipeline import (
