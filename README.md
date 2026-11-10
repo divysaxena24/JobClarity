@@ -1,6 +1,6 @@
 <div align="center">
 
-# JobClarity — Backend
+# JobClarity - Backend
 
 **Production-grade, AI-assisted fraudulent job posting risk detection service featuring XGBoost classification, native TreeSHAP explainability, and privacy-conscious MLOps telemetry.**
 
@@ -27,21 +27,24 @@
 ## Table of Contents
 
 - [1. Project Overview](#1-project-overview)
-- [2. Core Capabilities](#2-core-capabilities)
-- [3. Machine Learning Pipeline](#3-machine-learning-pipeline)
-- [4. Leakage-Aware Model Evaluation](#4-leakage-aware-model-evaluation)
-- [5. SHAP Explainability Methodology & Limitations](#5-shap-explainability-methodology--limitations)
-- [6. API Documentation & Endpoint Reference](#6-api-documentation--endpoint-reference)
-- [7. Repository Directory Structure](#7-repository-directory-structure)
-- [8. Installation & Local Setup](#8-installation--local-setup)
-- [9. Python Dependencies & Environment Lockfile](#9-python-dependencies--environment-lockfile)
-- [10. Environment Variables](#10-environment-variables)
-- [11. Running Tests & Evaluation Suites](#11-running-tests--evaluation-suites)
-- [12. Docker Setup & Non-Root Hardening](#12-docker-setup--non-root-hardening)
-- [13. MLflow Experiment Tracking & Model Governance](#13-mlflow-experiment-tracking--model-governance)
-- [14. Production Deployment Setup (Render)](#14-production-deployment-setup-render)
-- [15. Security, Privacy & Responsible-Use Boundaries](#15-security-privacy--responsible-use-boundaries)
-- [16. Known Technical Inconsistencies & Maintenance Notes](#16-known-technical-inconsistencies--maintenance-notes)
+- [2. System Architecture](#2-system-architecture)
+- [3. End-to-End User Flow](#3-end-to-end-user-flow)
+- [4. Model Working and Decision Pipeline](#4-model-working-and-decision-pipeline)
+- [5. Core Capabilities](#5-core-capabilities)
+- [6. Machine Learning Pipeline & Training Architecture](#6-machine-learning-pipeline--training-architecture)
+- [7. Leakage-Aware Model Evaluation](#7-leakage-aware-model-evaluation)
+- [8. SHAP Explainability Methodology & Limitations](#8-shap-explainability-methodology--limitations)
+- [9. API Documentation & Endpoint Reference](#9-api-documentation--endpoint-reference)
+- [10. Repository Directory Structure](#10-repository-directory-structure)
+- [11. Installation & Local Setup](#11-installation--local-setup)
+- [12. Python Dependencies & Environment Lockfile](#12-python-dependencies--environment-lockfile)
+- [13. Environment Variables](#13-environment-variables)
+- [14. Running Tests & Evaluation Suites](#14-running-tests--evaluation-suites)
+- [15. Docker Setup & Non-Root Hardening](#15-docker-setup--non-root-hardening)
+- [16. MLflow Experiment Tracking & Model Governance](#16-mlflow-experiment-tracking--model-governance)
+- [17. Production Deployment Setup (Render)](#17-production-deployment-setup-render)
+- [18. Security, Privacy & Responsible-Use Boundaries](#18-security-privacy--responsible-use-boundaries)
+- [19. Known Technical Inconsistencies & Maintenance Notes](#19-known-technical-inconsistencies--maintenance-notes)
 
 ---
 
@@ -49,7 +52,7 @@
 
 **JobClarity** is an AI-assisted risk detection microservice engineered to evaluate employment listings for markers of recruitment fraud, advance-fee scams, phishing, and deceptive hiring practices.
 
-Unlike conventional black-box security classifiers, JobClarity combines statistical machine learning inference with **native TreeSHAP feature attributions**. Every analyzed job description receives a continuous fraud probability estimate, an integer risk score (0–100), an operational risk tier, and the exact positive and negative keywords that drove the model's decision.
+Unlike conventional black-box security classifiers, JobClarity combines statistical machine learning inference with **native TreeSHAP feature attributions**. Every analyzed job description receives a continuous fraud probability estimate, an integer risk score (0-100), an operational risk tier, and the exact positive and negative keywords that drove the model's decision.
 
 ### Essential Operational Context:
 - **Risk Estimation, Not Verification**: Model outputs are **statistical risk estimates**, not legal or factual determinations of fraud or legitimacy.
@@ -58,35 +61,243 @@ Unlike conventional black-box security classifiers, JobClarity combines statisti
 
 ---
 
-## 2. Core Capabilities
+## 2. System Architecture
 
-### ⚡ FastAPI High-Performance Prediction Service
+The following diagram illustrates the deployment topology, request validation boundaries, inference routing, explainability engine, and telemetry persistence of the JobClarity backend ecosystem:
+
+```mermaid
+flowchart TD
+    subgraph ClientLayer["Client & Ingress Layer"]
+        UserBrowser["User Web Browser"]
+        NextFrontend["Next.js Frontend\n(jobclarity.vercel.app)"]
+        ExternalAPI["External API Clients / Automated Probes"]
+        CloudflareRender["Render Reverse Proxy / Cloudflare\n(SSL Termination & Header Forwarding)"]
+    end
+
+    subgraph ContainerRuntime["Hardened Docker Container (UID 1001: appuser)"]
+        subgraph APIGateway["FastAPI Web Layer (ASGI / Uvicorn)"]
+            RateLimiter["Sliding-Window Rate Limiter\n(60 req/min per IP via X-Forwarded-For)"]
+            SchemaValidator["Pydantic v2 Schema Validator\n(20 <= chars <= 50,000)"]
+            Router["FastAPI Application Router"]
+            HealthEndpoint["GET /health\n(Liveness & Readiness Probe)"]
+            ProdEndpoint["POST /predict\n(Production Baseline)"]
+            StagingEndpoint["POST /predict/staging\n(Shadow Candidate D)"]
+        end
+
+        subgraph CoreInference["Inference Engine"]
+            TextCleaner["Deterministic Text Sanitizer\n(HTML Entity Decode, URL/Phone/Email Scrub)"]
+            
+            subgraph BaselinePipeline["Production Baseline Engine"]
+                TFIDF["Frozen TfidfVectorizer\n(5,000 Sparse Features, unigram/bigram)"]
+                XGBoostBase["Tuned XGBoost Classifier\n(max_depth=6, scale_pos_weight)"]
+                TreeSHAP["Native C++ TreeSHAP Engine\n(booster.predict pred_contribs=True)"]
+            end
+
+            subgraph StagingPipeline["Shadow Staging Engine (Candidate D - Rejected)"]
+                UnionPipeline["Composite Feature Union\n(TF-IDF + 21 Domain Indicators)"]
+                XGBoostStaging["Candidate D XGBoost Model"]
+                StagingThresholds["Calibrated Threshold Decisioner\n(tau < 0.14: PASS | 0.14-0.33: REVIEW | >= 0.33: BLOCK)"]
+            end
+        end
+
+        subgraph ResilientServices["Auxiliary Services & Telemetry"]
+            ScoreMapper["Risk Tier & Score Synthesizer\n(Score: 0-100, Tier: Low/Med/High/Critical)"]
+            FailSafe["Explainability Isolation Wrapper\n(try/except fail-safe: defaults to empty)"]
+            TelemetryLogger["Thread-Safe Prediction Logger\n(logs/predictions.jsonl, SHA-256 Hashes)"]
+        end
+    end
+
+    subgraph StorageGovernance["Local Governance & Telemetry Stores"]
+        PredictionsLog[("predictions.jsonl\n(No Raw Text / Zero PII)")]
+        MLflowDB[("mlflow.db (SQLite)\n(Run Artifacts & Model Registry)")]
+    end
+
+    UserBrowser -->|HTTPS| NextFrontend
+    NextFrontend -->|REST JSON Request| CloudflareRender
+    ExternalAPI -->|Direct API Call| CloudflareRender
+    CloudflareRender -->|Forwarded Request with Client IP| RateLimiter
+
+    RateLimiter -->|Pass| SchemaValidator
+    RateLimiter -->|Limit Exceeded| Err429["HTTP 429 Too Many Requests"]
+    SchemaValidator -->|Invalid Length/Type| Err422["HTTP 422 Validation Error"]
+
+    SchemaValidator --> Router
+    Router --> HealthEndpoint
+    Router --> ProdEndpoint
+    Router --> StagingEndpoint
+
+    HealthEndpoint -->|Memory Check| HealthStatus["HTTP 200 {status: healthy}"]
+
+    ProdEndpoint --> TextCleaner
+    TextCleaner --> TFIDF
+    TFIDF --> XGBoostBase
+    XGBoostBase --> TreeSHAP
+    TreeSHAP -.-> FailSafe
+    XGBoostBase --> ScoreMapper
+    FailSafe --> ScoreMapper
+
+    ScoreMapper --> ProdResponse["HTTP 200 PredictionResponse\n{prediction, fraud_probability, fraud_risk_score, risk_level, top_reasons}"]
+    ProdResponse --> TelemetryLogger
+    TelemetryLogger --> PredictionsLog
+
+    StagingEndpoint --> UnionPipeline
+    UnionPipeline --> XGBoostStaging
+    XGBoostStaging --> StagingThresholds
+    StagingThresholds --> StagingResponse["HTTP 200 StagingPredictionResponse\n{fraud_probability, risk_tier, action, calibrated_thresholds}"]
+    StagingResponse --> TelemetryLogger
+```
+
+---
+
+## 3. End-to-End User Flow
+
+The sequence diagram below models the operational user lifecycle from entering a job description to receiving actionable risk analysis and factor-level explanations:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Job Seeker / Recruiter
+    participant UI as JobClarity Web App
+    participant Proxy as Reverse Proxy (Render / Cloudflare)
+    participant Limiter as Rate Limiter (Sliding Window)
+    participant API as FastAPI Router (/predict)
+    participant Cleaner as Text Normalizer
+    participant Model as XGBoost Classifier
+    participant SHAP as Native TreeSHAP Explainer
+    participant Logger as Telemetry Logger (JSONL)
+
+    User->>UI: Pastes job posting text into submission box
+    User->>UI: Clicks "Analyze Listing"
+    UI->>UI: Client-side validation (checks length >= 20 chars)
+    UI->>Proxy: POST https://jobclarity-0tz8.onrender.com/predict (JSON payload)
+    Proxy->>Limiter: Forwards request with client IP in X-Forwarded-For
+
+    alt Rate Limit Exceeded (> 60 req/min)
+        Limiter-->>UI: HTTP 429 Too Many Requests (Retry-After: N)
+        UI-->>User: Displays "Rate limit exceeded. Please wait."
+    else Rate Limit Valid
+        Limiter->>API: Dispatches validated request
+        
+        alt Payload Invalid (< 20 chars or > 50,000 chars)
+            API-->>UI: HTTP 422 Unprocessable Entity
+            UI-->>User: Highlights input length warning
+        else Valid Payload
+            API->>Cleaner: clean_text(job_description)
+            Cleaner-->>API: Returns sanitized plain text (tags/URLs/emails scrubbed)
+            
+            API->>Model: Transform via TfidfVectorizer & predict_proba(X)
+            Model-->>API: Returns probability p in [0.0, 1.0]
+
+            API->>SHAP: explain_prediction(job_description)
+            activate SHAP
+            SHAP->>SHAP: Calculate XGBoost pred_contribs across 5,000 sparse tokens
+            SHAP->>SHAP: Rank features by absolute attribution magnitude
+            SHAP->>SHAP: Filter negligible tokens (|phi| <= 1e-6)
+            SHAP-->>API: Returns top_reasons (up to 5 factors with impact and effect)
+            deactivate SHAP
+
+            API->>API: Compute fraud_risk_score = round(p * 100)
+            API->>API: Map risk_level (Low <= 25, Medium <= 50, High <= 75, Critical > 75)
+
+            par Asynchronous Telemetry
+                API-)Logger: log_prediction(SHA-256 hash, latency, risk metrics)
+                Logger-)Logger: Write append-only record to logs/predictions.jsonl
+            and Synchronous Response
+                API-->>UI: HTTP 200 OK with prediction, score, level, top_reasons
+            end
+
+            UI->>User: Displays Risk Score Badge, Risk Level Banner, and Factor Impact Chips
+        end
+    end
+```
+
+---
+
+## 4. Model Working and Decision Pipeline
+
+The diagram below details the data transformation, token attribution mathematics, and threshold decision logic powering the production scoring engine:
+
+```mermaid
+flowchart LR
+    subgraph Stage1["1. Sanitization"]
+        RawText["Raw Job Posting\n(Min 20, Max 50,000 chars)"]
+        Decode["HTML Entity Decoding\n(&amp;, &quot;, &#39;)"]
+        StripTags["HTML Tag Removal\n(<p>, <div>, <br>)"]
+        Anonymize["Regex Redaction\n(URLs, Emails, Phone Numbers)"]
+        Normalize["Whitespace & Lowercase\nNormalization"]
+    end
+
+    subgraph Stage2["2. Vector Representation"]
+        CleanText["Cleaned Normalized Text"]
+        VocabMap["Fitted Vocabulary\n(5,000 n-grams: 1-gram & 2-gram)"]
+        TFIDFCalc["Sublinear Term Frequency Scaling\n1 + log(tf) * idf"]
+        SparseVector["Sparse Feature Vector X\n(Dimension: 1 x 5,000)"]
+    end
+
+    subgraph Stage3["3. Ensemble Inference"]
+        Booster["Tuned XGBoost Booster\n(100 Gradient-Boosted Trees, max_depth=6)"]
+        Margin["Log-Odds Decision Margin\nMargin = sum(f_m(X))"]
+        Sigmoid["Sigmoid Activation\np = 1 / (1 + exp(-Margin))"]
+        RiskScore["Risk Score Formulation\nScore = round(p * 100)"]
+    end
+
+    subgraph Stage4["4. Exact TreeSHAP Interpretation"]
+        NativeContribs["XGBoost Native pred_contribs\n(Evaluated in C++)"]
+        AttributionSum["Margin Reconstitution\nMargin = phi_0 + sum(phi_i)"]
+        FeatureRanking["Feature Filter & Sort\n(|phi_i| > 1e-6, descending magnitude)"]
+        TopFactors["Top Contributing Factors\n(Positive: 'Increases risk'\nNegative: 'Decreases risk')"]
+    end
+
+    subgraph Stage5["5. Risk Tier Assignment"]
+        ScoreValue{"Risk Score (0 - 100)"}
+        LowTier["Low Risk\n(Score: 0 - 25)"]
+        MedTier["Medium Risk\n(Score: 26 - 50)"]
+        HighTier["High Risk\n(Score: 51 - 75)"]
+        CritTier["Critical Risk\n(Score: 76 - 100)"]
+    end
+
+    RawText --> Decode --> StripTags --> Anonymize --> Normalize --> CleanText
+    CleanText --> VocabMap --> TFIDFCalc --> SparseVector
+    SparseVector --> Booster --> Margin --> Sigmoid --> RiskScore
+    Booster --> NativeContribs --> AttributionSum --> FeatureRanking --> TopFactors
+    RiskScore --> ScoreValue
+    ScoreValue -->|<= 25| LowTier
+    ScoreValue -->|26 - 50| MedTier
+    ScoreValue -->|51 - 75| HighTier
+    ScoreValue -->|> 75| CritTier
+```
+
+---
+
+## 5. Core Capabilities
+
+### FastAPI High-Performance Prediction Service
 - Fully asynchronous REST API serving predictions with sub-50ms inference latency.
 - Strict Pydantic v2 input sanitization and schema contracts.
 - Automatic interactive documentation via Swagger UI and OpenAPI 3.1.
 
-### 🌲 Gradient-Boosted XGBoost Classifier
+### Gradient-Boosted XGBoost Classifier
 - Tuned tree ensemble trained over sparse, high-dimensional n-gram representations.
-- Continuous fraud probability estimate $p \in [0.0, 1.0]$ and standardized integer risk score ($0–100$).
-- Tiered risk classification: **Low** (0–25), **Medium** (26–50), **High** (51–75), and **Critical** (76–100).
+- Continuous fraud probability estimate $p \in [0.0, 1.0]$ and standardized integer risk score (0-100).
+- Tiered risk classification: **Low** (0-25), **Medium** (26-50), **High** (51-75), and **Critical** (76-100).
 
-### 🔍 Native C++ TreeSHAP Explainability
+### Native C++ TreeSHAP Explainability
 - Evaluates exact Shapley values directly using XGBoost's native `booster.predict(..., pred_contribs=True)`.
 - Reconstructs exact model decision margins: $\sum \phi_i + \phi_0 = \text{margin}$.
 - Completely isolated from inference failure: if explainability fails, the endpoint returns an empty factor list without failing the prediction.
 
-### 🛡️ Defensive Input Validation & Sliding-Window Rate Limiting
+### Defensive Input Validation & Sliding-Window Rate Limiting
 - **Length Bounds**: Rejects payloads $< 20$ characters or $> 50,000$ characters with structured HTTP 422 errors.
 - **Rate Limiting**: Built-in, in-memory sliding-window limiter enforcing 60 requests/minute per client IP.
 - **Anti-Spoofing Proxy Awareness**: Safely parses `X-Forwarded-For` when deployed behind reverse proxies (Render, Cloudflare) and validates candidate strings with `ipaddress.ip_address` to prevent header injection. Healthcheck routes remain unthrottled.
 
-### 🔒 Privacy-Preserving Structured Telemetry
+### Privacy-Preserving Structured Telemetry
 - Thread-safe JSONL prediction logging (`logs/predictions.jsonl`).
 - **Strict Privacy Guarantee**: Never persists raw job descriptions or PII. Logs non-reversible SHA-256 hashes (`input_sha256`), token lengths, risk scores, and latency metrics for drift auditing.
 
 ---
 
-## 3. Machine Learning Pipeline
+## 6. Machine Learning Pipeline & Training Architecture
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -125,41 +336,41 @@ Unlike conventional black-box security classifiers, JobClarity combines statisti
       +------------------------+                                      +------------------------+
 ```
 
-### 3.1 Dataset Description
+### 6.1 Dataset Description
 The model was developed using the **EMSCAD** (Employment Scam Aegean Dataset) benchmark:
 - **Total Postings**: 17,880
-- **Fraudulent Postings**: 866 ($4.84\%$)
-- **Legitimate Postings**: 17,014 ($95.16\%$)
-- **Severe Class Imbalance**: ~1 fraudulent listing per 20 authentic listings.
+- **Fraudulent Postings**: 866 (4.84%)
+- **Legitimate Postings**: 17,014 (95.16%)
+- **Severe Class Imbalance**: Approximately 1 fraudulent listing per 20 authentic listings.
 
-### 3.2 Preprocessing (`src/preprocessing/text_cleaner.py`)
+### 6.2 Preprocessing (`src/preprocessing/text_cleaner.py`)
 Incoming text passes through deterministic sanitization:
 1. **Entity Decoding**: Converts HTML entities (`&amp;`, `&quot;`, `&#39;`).
 2. **Structural Scrubbing**: Strips HTML tags (`<p>`, `<div>`, `<br>`).
 3. **Contact Anonymization**: Removes raw URLs, email addresses, and phone numbers to prevent memorizing transient scam domains or spoofed recruiter emails.
 4. **Case & Unicode Normalization**: Normalizes whitespace and converts text to lowercase.
 
-### 3.3 Feature Engineering (`src/features/feature_builder.py`)
+### 6.3 Feature Engineering (`src/features/feature_builder.py`)
 - **Production Baseline Vectorizer**: Unigrams and bigrams, 5,000 maximum vocabulary size, sublinear term-frequency scaling ($1 + \log(\text{tf})$), English stop-word filtering.
 - **Strict Anti-Leakage Boundary**: The vectorizer is fitted **exclusively on training data**. Out-of-vocabulary tokens in test or serving traffic are silently discarded without altering feature dimensions.
 
 ---
 
-## 4. Leakage-Aware Model Evaluation
+## 7. Leakage-Aware Model Evaluation
 
-### 4.1 Evolution of Evaluation Methodologies
+### 7.1 Evolution of Evaluation Methodologies
 
 Evaluating fraud detection on the EMSCAD benchmark requires careful handling of repeated job listings:
 
 1. **Historical Row-Level Random Split (Day 2)**:
    - *Protocol*: Naive random stratified 80/20 train/test partition (`train_test_split`, seed=42; source: `artifacts/evaluation/day2/final_evaluation_report.json`).
-   - *Reported Metrics*: Accuracy $97.82\%$, Fraud Precision $98.97\%$, Fraud Recall $55.49\%$, ROC-AUC $0.9492$, PR-AUC $0.7867$.
+   - *Reported Metrics*: Accuracy 97.82%, Fraud Precision 98.97%, Fraud Recall 55.49%, ROC-AUC 0.9492, PR-AUC 0.7867.
    - *Methodological Flaw*: High reported performance is distorted by exact and near-duplicate job listings syndicated across multiple locations, which leak verbatim training templates into the test set.
 
 2. **Exact-Group Split (Day 3 Session 1)**:
    - *Protocol*: Grouped partitioning on exact MD5 description hashes (`StratifiedGroupKFold`, 5-fold; source: `artifacts/evaluation/day3/group_evaluation_report.json`).
-   - *Reported Metrics*: PR-AUC $0.7029$, ROC-AUC $0.9270$, Recall $36.42\%$.
-   - *Methodological Limitation*: Eliminates verbatim identical postings, but near-duplicate templates (e.g., listings with $85\%\text{--}95\%$ text similarity with minor city or recruiter edits) continue to leak across folds.
+   - *Reported Metrics*: PR-AUC 0.7029, ROC-AUC 0.9270, Recall 36.42%.
+   - *Methodological Limitation*: Eliminates verbatim identical postings, but near-duplicate templates (e.g., listings with 85% to 95% text similarity with minor city or recruiter edits) continue to leak across folds.
 
 3. **Near-Duplicate Graph Cluster Split (Day 3 Session 3 & Phase 3 Audit)**:
    - *Protocol*: Postings with TF-IDF cosine similarity $\ge 0.90$ are joined as graph edges. Transitive closures (Union-Find) group postings into 12,337 disjoint component families. Clusters are atomically allocated to train (80%, $N = 14,304$) or held-out test (20%, $N = 3,576$).
@@ -167,7 +378,7 @@ Evaluating fraud detection on the EMSCAD benchmark requires careful handling of 
 
 ---
 
-### 4.2 Verified Evaluation Results on Held-Out Test Set ($N = 3,576$)
+### 7.2 Verified Evaluation Results on Held-Out Test Set ($N = 3,576$)
 
 Metrics below are sourced from the Phase 3 independent audit (`artifacts/evaluation/phase3_audit/phase3_audit_report.md` and `phase3_audit_metrics.json`), evaluated across 1,000 empirical bootstrap iterations on the held-out near-duplicate cluster split ($N = 3,576$, 240 Fraud, 3,336 Legit):
 
@@ -184,15 +395,15 @@ Metrics below are sourced from the Phase 3 independent audit (`artifacts/evaluat
 > **Evaluation Methodology & Verification Boundaries**:
 > - Confidence intervals represent empirical 95% percentile bootstrap intervals derived from 1,000 resamples. No formal null-hypothesis testing or p-values were computed, and no Phase 4.1 statistical hypothesis verification was conducted.
 > - The Phase 4 review (`artifacts/evaluation/phase4_review/production_model_decision.md`) was an architectural decision review evaluating the Phase 3 audit findings. It concluded that Candidate D's added regex heuristics caused decision-tree split fragmentation, degrading scam recall.
-> - **Calibration Scope**: While Brier score ($0.0403$) and ECE ($1.98\%$) were measured during Phase 3, the production pipeline outputs raw sigmoid probabilities directly from the XGBoost model without post-hoc probability calibration curves (such as isotonic regression or Platt scaling). Output probabilities and risk scores represent statistical risk estimates, not legal proof of fraud or verified legitimacy.
+> - **Calibration Scope**: While Brier score (0.0403) and ECE (1.98%) were measured during Phase 3, the production pipeline outputs raw sigmoid probabilities directly from the XGBoost model without post-hoc probability calibration curves (such as isotonic regression or Platt scaling). Output probabilities and risk scores represent statistical risk estimates, not legal proof of fraud or verified legitimacy.
 
-### 4.3 Why Accuracy Alone is Misleading
-In a dataset with $4.84\%$ positive prevalence, **accuracy is a dangerous and deceptive metric**:
+### 7.3 Why Accuracy Alone is Misleading
+In a dataset with 4.84% positive prevalence, **accuracy is a dangerous and deceptive metric**:
 - A degenerate dummy classifier predicting "Legitimate" for 100% of inputs achieves **93.29% accuracy** on the held-out test set while detecting **0 out of 240 scams**.
-- Both Baseline ($95.39\%$ accuracy) and Candidate D ($94.41\%$ accuracy) appear superficially strong, yet Candidate D misses $83.33\%$ of scams at default threshold.
+- Both Baseline (95.39% accuracy) and Candidate D (94.41% accuracy) appear superficially strong, yet Candidate D misses 83.33% of scams at default threshold.
 - Consequently, JobClarity prioritizes **Precision-Recall AUC (PR-AUC)**, recall at bounded precision thresholds, and Brier calibration scores.
 
-### 4.4 Operational Threshold Trade-Off Analysis
+### 7.4 Operational Threshold Trade-Off Analysis
 Empirical performance across operating points on the held-out test set ($N = 3,576$, 240 Fraud, 3,336 Legit):
 
 ```
@@ -209,29 +420,29 @@ Empirical performance across operating points on the held-out test set ($N = 3,5
 
 ---
 
-## 5. SHAP Explainability Methodology & Limitations
+## 8. SHAP Explainability Methodology & Limitations
 
-### 5.1 Methodology
+### 8.1 Methodology
 JobClarity utilizes native XGBoost C++ TreeSHAP (`src/explainability/shap_explainer.py`):
 1. **Input Matrix**: Incoming cleaned text is transformed into the 5,000-dimensional sparse TF-IDF vector $X$.
 2. **Attribution Extraction**: The booster computes exact feature attributions:
    ```python
    contribs = booster.predict(xgb.DMatrix(X), pred_contribs=True)
    values = contribs[0][:-1]  # Exclude base bias term
-```
+   ```
 3. **Filtering & Direction Mapping**: Zero-impact tokens ($|\phi| \le 10^{-6}$) are excluded. Features are sorted by absolute magnitude, mapped to vectorizer vocabulary, and tagged:
    - $\phi_i > 0 \rightarrow$ `"Increases fraud risk"`
    - $\phi_i < 0 \rightarrow$ `"Decreases fraud risk"`
 4. **Fail-Safe Shielding**: Explainability execution is isolated in a `try/except` block. Any attribution calculation error returns `top_reasons: []`, guaranteeing that predictions never fail due to explainability issues.
 
-### 5.2 Critical Limitations of SHAP Explanations
-1. **Statistical Association $\neq$ Real-World Causation**: SHAP values indicate how strongly individual tokens influenced the mathematical decision margin of this specific XGBoost model. **They do not prove why an employer acted or whether fraud actually occurred**.
+### 8.2 Critical Limitations of SHAP Explanations
+1. **Statistical Association != Real-World Causation**: SHAP values indicate how strongly individual tokens influenced the mathematical decision margin of this specific XGBoost model. **They do not prove why an employer acted or whether fraud actually occurred**.
 2. **Vocabulary Artifacts**: Standard terms (e.g., `services`, `based`, `phone`) may appear with negative or positive impacts due to co-occurrence distributions in historical training data rather than intrinsic legitimacy or risk.
 3. **The "Corporate Camouflage" Blind Spot**: In Phase 3 audit analysis, **51.67% of missed scams** were verbatim or near-verbatim copies of authentic Fortune 500 job descriptions. Because the copied text is bona fide, TreeSHAP attributions will show genuine corporate terminology pushing the fraud score *down*, even though the listing is fraudulent.
 
 ---
 
-## 6. API Documentation & Endpoint Reference
+## 9. API Documentation & Endpoint Reference
 
 - **Live Production URL**: `https://jobclarity-0tz8.onrender.com`
 - **Swagger UI**: [`/docs`](https://jobclarity-0tz8.onrender.com/docs)
@@ -248,7 +459,7 @@ The deployed production OpenAPI schema (`/openapi.json`) defines four routes, ca
 
 ---
 
-### 6.1 Production Endpoint: `POST /predict`
+### 9.1 Production Endpoint: `POST /predict`
 
 This is the primary production endpoint for customer-facing applications (such as the JobClarity frontend). It executes the validated **Production Baseline** pipeline (`TF-IDF + XGBoost`).
 
@@ -310,7 +521,7 @@ X-RateLimit-Reset: 60
 
 ---
 
-### 6.2 Staging / Benchmark Endpoint: `POST /predict/staging`
+### 9.2 Staging / Benchmark Endpoint: `POST /predict/staging`
 
 > [!WARNING]
 > **Staging / Non-Production Status**: While `POST /predict/staging` is registered in the deployed OpenAPI schema on Render for shadow benchmarking, it executes **Candidate D** (`staging_candidate_d_model.joblib`). Because Candidate D was **formally rejected for production promotion** in Phase 4 due to significant recall degradation, this endpoint is strictly intended for internal evaluation and comparative analysis. It must not be used for production client integrations.
@@ -370,84 +581,96 @@ Returned safely if model artifacts fail to load into memory:
 
 ---
 
-## 7. Repository Directory Structure
+## 10. Repository Directory Structure
 
 ```
 JobClarity/
-├── artifacts/
-│   ├── candidate/                    # Candidate split metadata and candidate models
-│   └── evaluation/
-│       ├── day2/                     # Stratified baseline validation reports
-│       ├── day3/                     # Near-duplicate graph evaluation reports
-│       ├── day4/                     # Staging candidate evaluation & latency benchmarks
-│       ├── phase3_audit/             # Leakage-aware audit reports, CSVs & ROC/PR curves
-│       ├── phase4_review/            # Production model retention decision report
-│       └── phase7_audit/             # Production readiness audit & remediation reports
-├── configs/                          # Experiment configuration files
-├── data/
-│   ├── raw/
-│   │   └── fake_job_postings.csv     # EMSCAD dataset (17,880 rows)
-│   └── processed/
-│       └── cleaned_jobs.csv          # Preprocessed dataset
-├── models/                           # Production model artifacts (frozen)
-│   ├── tfidf_vectorizer.pkl          # 5,000-feature TfidfVectorizer (Serialized under 1.9.0)
-│   ├── xgboost_model.pkl             # Initial baseline XGBoost Booster
-│   └── xgboost_model_tuned.pkl       # Tuned production XGBoost Booster
-├── logs/
-│   └── predictions.jsonl             # Privacy-preserving runtime telemetry (git-ignored)
-├── notebooks/                        # EDA, prototype vectorizers, and research notebooks
-├── scripts/
-│   ├── run_phase3_audit.py           # Independent leakage-aware evaluation runner
-│   ├── run_day6_mlflow_logging.py    # MLflow experiment tracking reproduction script
-│   └── run_staging_validation.py     # Staging candidate verification script
-├── src/
-│   ├── api/
-│   │   ├── main.py                   # FastAPI initialization, CORS, and root metadata
-│   │   ├── predictor.py              # Production inference execution & risk scoring
-│   │   ├── rate_limiter.py           # Sliding-window rate limiter & proxy IP extraction
-│   │   ├── routes.py                 # Endpoint router (/health, /predict, /predict/staging)
-│   │   └── schemas.py                # Pydantic v2 request and response contracts
-│   ├── explainability/
-│   │   ├── candidate_shap_explainer.py # TreeSHAP extractor for Candidate D
-│   │   └── shap_explainer.py         # Native C++ TreeSHAP explainer for Production Baseline
-│   ├── features/
-│   │   ├── feature_builder.py        # Text concatenation and TF-IDF matrix builder
-│   │   ├── feature_pipeline.py       # Composite FeatureUnion pipeline
-│   │   ├── suspicious_language.py    # 21 heuristic regex indicator extractors
-│   │   └── tfidf_vectorizer.py       # Vectorizer building blocks
-│   ├── models/
-│   │   ├── evaluate.py               # Metric calculation (PR-AUC, ROC-AUC, Brier)
-│   │   ├── experiment_tracker.py     # MLflow logging, sanitization, and PyFunc wrappers
-│   │   ├── hyperparameter_tuner.py   # Bayesian hyperparameter optimization
-│   │   ├── model_loader.py           # Thread-safe artifact deserialization
-│   │   ├── model_trainer.py          # XGBoost training pipeline
-│   │   ├── staging_predictor.py      # Candidate D predictor class
-│   │   └── threshold_optimizer.py    # Pareto frontier threshold optimization
-│   ├── preprocessing/
-│   │   └── text_cleaner.py           # Regex text normalization & HTML/URL stripping
-│   └── validation/
-│       ├── dataset_audit.py          # Dataset schema and leakage auditor
-│       ├── group_evaluator.py        # Group-aware cross-validation evaluator
-│       └── near_duplicate_grouper.py # Union-Find graph connected components clustering
-├── tests/                            # Automated test suite (363 tests passing)
-│   ├── conftest.py                   # Test fixtures, mock models, and TestClient setup
-│   ├── test_api.py                   # Route status, input boundary & 422 validation tests
-│   ├── test_candidate_explainability.py # Candidate D TreeSHAP tests
-│   ├── test_deployment_readiness.py  # Dockerfile non-root, .dockerignore, CORS tests
-│   ├── test_explainability.py        # Baseline TreeSHAP formatting & fail-safe tests
-│   ├── test_near_duplicate_grouper.py# Graph clustering & Union-Find tests
-│   ├── test_rate_limiter.py          # Sliding-window rate limiting & anti-spoofing tests
-│   └── test_staging_validation.py    # Staging threshold boundaries and schema tests
-├── Dockerfile                        # Hardened container definition (non-root UID 1001)
-├── pytest.ini                        # PyTest configuration and filter warnings
-├── requirements.txt                  # Top-level dependencies
-├── requirements.lock                 # Pinned reproducible dependency lockfile
-└── README.md                         # Project documentation
+|-- artifacts/
+|   |-- candidate/                    # Candidate split metadata and candidate models
+|   `-- evaluation/
+|       |-- day2/                     # Stratified baseline validation reports
+|       |-- day3/                     # Near-duplicate graph evaluation reports
+|       |-- day4/                     # Staging candidate evaluation & latency benchmarks
+|       |-- phase3_audit/             # Leakage-aware audit reports, CSVs & ROC/PR curves
+|       |-- phase4_review/            # Production model retention decision report
+|       `-- phase7_audit/             # Production readiness audit & remediation reports
+|-- configs/                          # Experiment configuration files
+|-- data/
+|   |-- raw/
+|   |   `-- fake_job_postings.csv     # EMSCAD dataset (17,880 rows)
+|   `-- processed/
+|       `-- cleaned_jobs.csv          # Preprocessed dataset
+|-- models/                           # Production model artifacts (frozen)
+|   |-- tfidf_vectorizer.pkl          # 5,000-feature TfidfVectorizer (Serialized under 1.9.0)
+|   |-- xgboost_model.pkl             # Initial baseline XGBoost Booster
+|   `-- xgboost_model_tuned.pkl       # Tuned production XGBoost Booster
+|-- logs/
+|   `-- predictions.jsonl             # Privacy-preserving runtime telemetry (git-ignored)
+|-- notebooks/                        # EDA, prototype vectorizers, and research notebooks
+|-- scripts/
+|   |-- run_phase3_audit.py           # Independent leakage-aware evaluation runner
+|   |-- run_day6_mlflow_logging.py    # MLflow experiment tracking reproduction script
+|   `-- run_staging_validation.py     # Staging candidate verification script
+|-- src/
+|   |-- api/
+|   |   |-- main.py                   # FastAPI initialization, CORS, and root metadata
+|   |   |-- predictor.py              # Production inference execution & risk scoring
+|   |   |-- rate_limiter.py           # Sliding-window rate limiter & proxy IP extraction
+|   |   |-- routes.py                 # Endpoint router (/health, /predict, /predict/staging)
+|   |   |-- schemas.py                # Pydantic v2 request and response contracts
+|   |   `-- __init__.py
+|   |-- explainability/
+|   |   |-- candidate_shap_explainer.py # TreeSHAP extractor for Candidate D
+|   |   |-- shap_explainer.py         # Native C++ TreeSHAP explainer for Production Baseline
+|   |   `-- __init__.py
+|   |-- features/
+|   |   |-- feature_builder.py        # Text concatenation and TF-IDF matrix builder
+|   |   |-- feature_pipeline.py       # Composite FeatureUnion pipeline
+|   |   |-- suspicious_language.py    # 21 heuristic regex indicator extractors
+|   |   |-- tfidf_vectorizer.py       # Vectorizer building blocks
+|   |   `-- __init__.py
+|   |-- models/
+|   |   |-- evaluate.py               # Metric calculation (PR-AUC, ROC-AUC, Brier)
+|   |   |-- experiment_tracker.py     # MLflow logging, sanitization, and PyFunc wrappers
+|   |   |-- hyperparameter_tuner.py   # Bayesian hyperparameter optimization
+|   |   |-- model_loader.py           # Thread-safe artifact deserialization
+|   |   |-- model_trainer.py          # XGBoost training pipeline
+|   |   |-- staging_predictor.py      # Candidate D predictor class
+|   |   |-- threshold_optimizer.py    # Pareto frontier threshold optimization
+|   |   `-- __init__.py
+|   |-- preprocessing/
+|   |   |-- text_cleaner.py           # Regex text normalization & HTML/URL stripping
+|   |   |-- utils.py
+|   |   `-- __init__.py
+|   |-- services/
+|   |   |-- prediction_logger.py      # Thread-safe structured telemetry service
+|   |   `-- __init__.py
+|   |-- utils/
+|   |   `-- __init__.py
+|   `-- validation/
+|       |-- dataset_audit.py          # Dataset schema and leakage auditor
+|       |-- group_evaluator.py        # Group-aware cross-validation evaluator
+|       |-- near_duplicate_grouper.py # Union-Find graph connected components clustering
+|       `-- __init__.py
+|-- tests/                            # Automated test suite (363 tests passing)
+|   |-- conftest.py                   # Test fixtures, mock models, and TestClient setup
+|   |-- test_api.py                   # Route status, input boundary & 422 validation tests
+|   |-- test_candidate_explainability.py # Candidate D TreeSHAP tests
+|   |-- test_deployment_readiness.py  # Dockerfile non-root, .dockerignore, CORS tests
+|   |-- test_explainability.py        # Baseline TreeSHAP formatting & fail-safe tests
+|   |-- test_near_duplicate_grouper.py# Graph clustering & Union-Find tests
+|   |-- test_rate_limiter.py          # Sliding-window rate limiting & anti-spoofing tests
+|   `-- test_staging_validation.py    # Staging threshold boundaries and schema tests
+|-- Dockerfile                        # Hardened container definition (non-root UID 1001)
+|-- pytest.ini                        # PyTest configuration and filter warnings
+|-- requirements.txt                  # Top-level dependencies
+|-- requirements.lock                 # Pinned reproducible dependency lockfile
+`-- README.md                         # Project documentation
 ```
 
 ---
 
-## 8. Installation & Local Setup
+## 11. Installation & Local Setup
 
 ### Prerequisites
 - Python 3.12+ (Python 3.12.1 tested)
@@ -489,7 +712,7 @@ JobClarity/
 
 ---
 
-## 9. Python Dependencies & Environment Lockfile
+## 12. Python Dependencies & Environment Lockfile
 
 JobClarity separates **production runtime/test dependencies** from **development/research dependencies** to ensure clean, conflict-free dependency resolution and minimal container attack surfaces:
 
@@ -515,11 +738,11 @@ The production environment is pinned in [`requirements.lock`](requirements.lock)
 | `pytest` | `9.0.2` | Automated testing framework |
 | `httpx` | `0.28.1` | HTTP client for endpoint integration tests |
 
-> **Note on `scikit-learn` Version Compatibility**: While `requirements.lock` pins `scikit-learn==1.5.0`, the serialized vectorizer artifact (`models/tfidf_vectorizer.pkl`) reports having been serialized under version `1.9.0`. Compatibility across versions remains an unresolved technical finding pending controlled verification (see [Section 16](#16-known-technical-inconsistencies--maintenance-notes)). Production model artifacts are preserved as frozen binaries without retraining or re-serializing.
+> **Note on `scikit-learn` Version Compatibility**: While `requirements.lock` pins `scikit-learn==1.5.0`, the serialized vectorizer artifact (`models/tfidf_vectorizer.pkl`) reports having been serialized under version `1.9.0`. Compatibility across versions remains an unresolved technical finding pending controlled verification (see [Section 19](#19-known-technical-inconsistencies--maintenance-notes)). Production model artifacts are preserved as frozen binaries without retraining or re-serializing.
 
 ---
 
-## 10. Environment Variables
+## 13. Environment Variables
 
 The backend reads configuration from the environment, with safe local defaults:
 
@@ -555,10 +778,10 @@ MLFLOW_TRACKING_URI=sqlite:///mlflow.db
 
 ---
 
-## 11. Running Tests & Evaluation Suites
+## 14. Running Tests & Evaluation Suites
 
-### 11.1 Automated Test Suite
-JobClarity maintains **363 automated unit, integration, ML, and regression tests** passing with $100\%$ success rate:
+### 14.1 Automated Test Suite
+JobClarity maintains **363 automated unit, integration, ML, and regression tests** passing with 100% success rate:
 
 ```bash
 # Run the complete test suite
@@ -579,10 +802,10 @@ pytest --cov=src --cov-report=term-missing
 - `tests/test_candidate_explainability.py` (14 tests): Candidate D local accuracy, feature categorization.
 - `tests/test_near_duplicate_grouper.py` (42 tests): Union-Find transitive components, residual leakage audits.
 - `tests/test_ml_pipeline.py` (37 tests): Training determinism, OOV isolation, cross-validation tuning.
-- `tests/test_staging_validation.py` (67 tests): Multi-tier calibrated threshold boundaries ($0.14 / 0.33$), NaN/Inf rejection.
+- `tests/test_staging_validation.py` (67 tests): Multi-tier calibrated threshold boundaries (0.14 / 0.33), NaN/Inf rejection.
 - Other modules (140 tests): Preprocessing, feature builders, dataset audits, MLflow recovery, predictor boundaries.
 
-### 11.2 Evaluation & Audit Scripts
+### 14.2 Evaluation & Audit Scripts
 ```bash
 # Run the leakage-aware Phase 3 evaluation audit (generates curves and metric JSONs)
 python scripts/run_phase3_audit.py
@@ -593,7 +816,7 @@ python scripts/run_day6_mlflow_logging.py
 
 ---
 
-## 12. Docker Setup & Non-Root Hardening
+## 15. Docker Setup & Non-Root Hardening
 
 The backend container configuration is specified in [`Dockerfile`](Dockerfile) with the following implemented controls:
 - **Base Image**: `python:3.12-slim` (minimal attack surface).
@@ -618,7 +841,7 @@ curl http://localhost:8000/health
 
 ---
 
-## 13. MLflow Experiment Tracking & Model Governance
+## 16. MLflow Experiment Tracking & Model Governance
 
 JobClarity integrates MLflow for local experiment logging without external cloud dependencies:
 
@@ -633,7 +856,7 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000) to inspect:
 
 ---
 
-## 14. Production Deployment Setup (Render)
+## 17. Production Deployment Setup (Render)
 
 The backend is continuously deployed on **Render** as a containerized Web Service:
 - **Environment**: Docker (`Dockerfile`).
@@ -644,7 +867,7 @@ The backend is continuously deployed on **Render** as a containerized Web Servic
 
 ---
 
-## 15. Security, Privacy & Responsible-Use Boundaries
+## 18. Security, Privacy & Responsible-Use Boundaries
 
 1. **Statistical Risk Estimates, Not Verifications**: JobClarity evaluates linguistic and structural risk signals. A "Low Risk" verdict does not verify employer legitimacy; a "High Risk" verdict does not constitute legal proof of a crime.
 2. **Text-Theft / Corporate Camouflage**: The model evaluates text alone. Postings that steal authentic job descriptions from legitimate enterprises cannot be caught by text NLP alone and require manual recruiter verification.
@@ -653,7 +876,7 @@ The backend is continuously deployed on **Render** as a containerized Web Servic
 
 ---
 
-## 16. Known Technical Inconsistencies & Maintenance Notes
+## 19. Known Technical Inconsistencies & Maintenance Notes
 
 During the Phase 7 audit, the following technical items were cataloged:
 
@@ -666,14 +889,14 @@ During the Phase 7 audit, the following technical items were cataloged:
    - *Compatibility Status*: Passing test suite runs do not establish safe cross-version pickle compatibility or guarantee safety against subtle numerical or tokenization shifts across scikit-learn releases. Furthermore, re-serialization or retraining has not been established or validated as an approved fix. Compatibility remains an unresolved technical issue pending controlled verification in a staging test environment.
 2. **Candidate D Staging Rejection & Production Baseline Retention**:
    - The primary production endpoint `/predict` is powered by the **Production Baseline** pipeline.
-   - The staging endpoint `/predict/staging` evaluates **Candidate D** strictly for shadow benchmarking. The Phase 4 architectural review established that Candidate D's hand-crafted regex heuristics caused decision-tree split fragmentation, degrading held-out PR-AUC from $0.7333$ to $0.6225$ and cutting scam recall from $31.25\%$ to $16.67\%$ at $\tau=0.50$. Consequently, Candidate D was **formally rejected for production promotion** and is not deployed for production traffic.
+   - The staging endpoint `/predict/staging` evaluates **Candidate D** strictly for shadow benchmarking. The Phase 4 architectural review established that Candidate D's hand-crafted regex heuristics caused decision-tree split fragmentation, degrading held-out PR-AUC from 0.7333 to 0.6225 and cutting scam recall from 31.25% to 16.67% at $\tau=0.50$. Consequently, Candidate D was **formally rejected for production promotion** and is not deployed for production traffic.
 
 ---
 
 <div align="center">
 
-**JobClarity** — *Detect fake jobs. Restore trust in employment.*
+**JobClarity** - *Detect fake jobs. Restore trust in employment.*
 
-[🌐 Live Application](https://jobclarity.vercel.app/) • [📖 API Documentation](https://jobclarity-0tz8.onrender.com/docs) • [🎨 Frontend Repository](https://github.com/divysaxena24/JobClarity-frontend)
+[Live Application](https://jobclarity.vercel.app/) | [API Documentation](https://jobclarity-0tz8.onrender.com/docs) | [Frontend Repository](https://github.com/divysaxena24/JobClarity-frontend)
 
 </div>
